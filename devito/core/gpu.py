@@ -56,8 +56,15 @@ class DeviceOperatorMixin(object):
     """
 
     GPU_FIT = 'all-fallback'
+    TLIMIT = 128
     """
     Assuming all functions fit into the gpu memory.
+    """
+
+    PAR_NESTED = 0
+    """
+    Use nested parallelism if the number of hyperthreads per core is greater
+    than this threshold.
     """
 
     @classmethod
@@ -76,6 +83,7 @@ class DeviceOperatorMixin(object):
         o['fuse-tasks'] = oo.pop('fuse-tasks', False)
 
         # Blocking
+        o['blocking'] = oo.pop('blocking', False)
         o['blockinner'] = oo.pop('blockinner', True)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
         o['blockeager'] = oo.pop('blockeager', cls.BLOCK_EAGER)
@@ -97,9 +105,10 @@ class DeviceOperatorMixin(object):
         o['par-collapse-work'] = 1  # Always collapse (meaningful if `par-tile=False`)
         o['par-chunk-nonaffine'] = oo.pop('par-chunk-nonaffine', cls.PAR_CHUNK_NONAFFINE)
         o['par-dynamic-work'] = np.inf  # Always use static scheduling
-        o['par-nested'] = np.inf  # Never use nested parallelism
+        o['par-nested'] = oo.pop('par-nested', cls.PAR_NESTED)
         o['par-disabled'] = oo.pop('par-disabled', True)  # No host parallelism by default
         o['gpu-fit'] = as_tuple(oo.pop('gpu-fit', cls._normalize_gpu_fit(**kwargs)))
+        o['thread-limit'] = oo.pop('thread-limit', cls.TLIMIT)
 
         # Misc
         o['optcomms'] = oo.pop('optcomms', True)
@@ -137,6 +146,7 @@ class DeviceNoopOperator(DeviceOperatorMixin, CoreOperator):
 
         # GPU parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)
+
         parizer.make_parallel(graph)
         parizer.initialize(graph)
 
@@ -192,8 +202,10 @@ class DeviceAdvOperator(DeviceOperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Blocking to define thread blocks
-        if options['blocklazy']:
-            clusters = blocking(clusters, sregistry, options)
+        # if options['blocklazy']:
+        #     clusters = blocking(clusters, sregistry, options)
+        
+        clusters = blocking(clusters, sregistry, options)
 
         return clusters
 
