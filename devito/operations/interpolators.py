@@ -279,11 +279,15 @@ class LinearInterpolator(GenericInterpolator):
             variables = list(retrieve_function_carriers(_expr)) + [field]
 
             # Need to get origin of the field in case it is staggered
-            field_offset = field.origin
             try:
-                assert (len(field_offset) == len(self.grid.dimensions))
+                # Search for nested fields, in case there are,
+                # assert they have the same origin
+                fields = retrieve_function_carriers(field.indices)
+                origin = [f.origin for f in fields]
+                assert all(o == origin[0] for o in origin)
+                field_offset = origin[0]
             except:
-                field_offset = tuple([0] * len(self.grid.dimensions))
+                field_offset = field.origin
 
             # List of indirection indices for all adjacent grid points
             idx_subs, temps = self._interpolation_indices(variables, offset,
