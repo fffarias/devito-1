@@ -596,17 +596,30 @@ def test_decompose_2d():
     """
     Test source preinjection and the data shape returned
     """
+    nt = 20
     grid = Grid(shape=(16, 16), extent=(225., 225.), origin=(25., 35.))
     u = TimeFunction(name='u', grid=grid, space_order=2)
-    src = SparseTimeFunction(name='sf1', grid=u.grid, npoint=1, nt=20)
+    src = SparseTimeFunction(name='sf1', grid=u.grid, npoint=1, nt=nt)
     src.coordinates.data[0, :] = (25.0, 37.0)
-    src.data[0, :] = 1
+    src.data[:, :] = 1
 
     # This should aim to return equations on precomputed sources
-    save_src, s_id = src.decompose(field=u, expr=src)
-
+    save_src, sid, mask = src.decompose(field=u, expr=src)
     assert (save_src.shape == (20, 4))
-    assert (s_id.shape == grid.shape)
+    assert (sid.shape == grid.shape)
+
+    sparse_eqs = src.preinject(field=u, save_src=save_src, sid=sid, mask=mask)
+
+    op = Operator(sparse_eqs)
+    op.apply(time_M=nt-1)
+    norm1 = np.linalg.norm(u.data)
+
+    u.data[:] = 0
+    op2 = Operator(src.inject(field=u, expr=src))
+    op2.apply(time_M=nt-1)
+    norm2 = np.linalg.norm(u.data)
+
+    assert np.isclose(norm1, norm2)
 
 
 def test_decompose_3d():
@@ -620,7 +633,7 @@ def test_decompose_3d():
     src.data[0, :] = 1
 
     # This should aim to return equations on precomputed sources
-    save_src, s_id = src.decompose(field=u, expr=src)
+    save_src, s_id, _ = src.decompose(field=u, expr=src)
 
     assert (save_src.shape == (20, 8))
     assert (s_id.shape == grid.shape)
