@@ -590,3 +590,37 @@ def test_msf_interpolate():
     assert np.all(np.unique(nzt) == np.array([1, 2, 3, 4]))
     # 12 points x 4 timesteps
     assert nzt.size == 48
+
+
+def test_decompose_2d():
+    """
+    Test source preinjection and the data shape returned
+    """
+    grid = Grid(shape=(16, 16), extent=(225., 225.), origin=(25., 35.))
+    u = TimeFunction(name='u', grid=grid, space_order=2)
+    src = SparseTimeFunction(name='sf1', grid=u.grid, npoint=1, nt=20)
+    src.coordinates.data[0, :] = (25.0, 37.0)
+    src.data[0, :] = 1
+
+    # This should aim to return equations on precomputed sources
+    save_src, s_id = src.decompose(field=u, expr=src)
+
+    assert (save_src.shape == (20, 4))
+    assert (s_id.shape == grid.shape)
+
+
+def test_decompose_3d():
+    """
+    Test source preinjection and the data shape returned
+    """
+    grid = Grid(shape=(16, 16, 16), extent=(225., 225., 225.), origin=(25., 35., 35.))
+    u = TimeFunction(name='u', grid=grid, space_order=2)
+    src = SparseTimeFunction(name='sf1', grid=u.grid, npoint=1, nt=20)
+    src.coordinates.data[0, :] = (25.0, 37.0, 37.0)
+    src.data[0, :] = 1
+
+    # This should aim to return equations on precomputed sources
+    save_src, s_id = src.decompose(field=u, expr=src)
+
+    assert (save_src.shape == (20, 8))
+    assert (s_id.shape == grid.shape)
