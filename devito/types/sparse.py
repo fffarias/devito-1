@@ -964,47 +964,49 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
 
         sp_source_mask = Function(name='sp_source_mask', shape=sparse_shape,
                                   dimensions=sparse_dims, space_order=0, dtype=np.int32)
-
-        # Now holds IDs
         sp_source_mask.data[inds[0], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
-        # seems good
-        in_ind = Scalar(name='in_ind', dtype=np.int32)
-        t = field.grid.stepping_dim
 
-        if len(field.grid.dimensions) == 2:
+        # Temporary ints
+        in_i = Scalar(name='in_i', dtype=np.int32)
+        in_ii = Scalar(name='in_ii', dtype=np.int32)
+
+        # Time and stepping dimension
+        t = field.grid.stepping_dim
+        time = field.grid.time_dim
+
+        if len(field.grid.dimensions) == 2:  # 2D case
             x, y = field.grid.dimensions
-            time = field.grid.time_dim
+
             eq0 = Eq(sp_in.symbolic_max, nnz[x] - 1,
                      implicit_dims=(field.grid.time_dim, x))
 
-            eq1 = Eq(in_ind, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
+            eq1 = Eq(in_i, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
 
-            # inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
-            # Is source_mask needed /
-            inj_expr = save_src[time, sid[x, in_ind]]
+            eq2 = Eq(in_ii, sid[x, in_i], implicit_dims=(time, x, sp_in))
 
-            eq_u = Inc(field[t, x, in_ind], inj_expr, implicit_dims=(time, x, sp_in))
+            inj_expr = save_src[time, in_ii]
 
-            sparse_eqs = (eq0, eq1, eq_u)
-            return sparse_eqs
+            eq3 = Inc(field[t, x, in_ii], inj_expr, implicit_dims=(time, x, sp_in))
 
-        elif len(field.grid.dimensions) == 3:
+            return (eq0, eq1, eq2, eq3)
+
+        elif len(field.grid.dimensions) == 3:  # 3D case
             x, y, z = field.grid.dimensions
-            time = field.grid.time_dim
+
             eq0 = Eq(sp_in.symbolic_max, nnz[x, y] - 1,
                      implicit_dims=(field.grid.time_dim, x, y))
 
-            eq1 = Eq(in_ind, sp_source_mask[x, y, sp_in],
+            eq1 = Eq(in_i, sp_source_mask[x, y, sp_in],
                      implicit_dims=(time, x, y, sp_in))
 
-            inj_expr = save_src[time, sid[x, y, in_ind]]
+            eq2 = Eq(in_ii, sid[x, y, in_i], implicit_dims=(time, x, y, sp_in))
 
-            eq_u = Inc(field[t, x, y, in_ind], inj_expr,
-                       implicit_dims=(time, x, y, sp_in))
+            inj_expr = save_src[time, in_ii]
 
-            sparse_eqs = (eq0, eq1, eq_u)
+            eq3 = Inc(field[t, x, y, in_ii], inj_expr,
+                      implicit_dims=(time, x, y, sp_in))
 
-        return sparse_eqs
+        return (eq0, eq1, eq2, eq3)
 
     # Pickling support
     _pickle_kwargs = AbstractSparseTimeFunction._pickle_kwargs +\

@@ -45,7 +45,6 @@ class PragmaSimdTransformer(PragmaTransformer):
     def make_simd(self, iet):
         mapper = {}
         for tree in retrieve_iteration_tree(iet):
-            # import pdb;pdb.set_trace()
             candidates = [i for i in tree if i.is_ParallelRelaxed]
 
             # As long as there's an outer level of parallelism, the innermost
@@ -54,8 +53,8 @@ class PragmaSimdTransformer(PragmaTransformer):
                 continue
             candidate = candidates[-1]
 
-            # Only fully-parallel Iterations will be SIMD-ized (ParallelRelaxed
-            # might not be enough then)
+            # Only fully-parallel Iterations or Parallel Atomic will be SIMD-ized
+            # (ParallelRelaxed might not be enough then) 
             if not (candidate.is_Parallel or candidate.is_ParallelAtomic):
                 continue
 
