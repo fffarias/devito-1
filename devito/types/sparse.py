@@ -969,24 +969,41 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
         sp_source_mask.data[inds[0], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
         # seems good
         in_ind = Scalar(name='in_ind', dtype=np.int32)
-
-        x, y = field.grid.dimensions
-        time = field.grid.time_dim
-        eq0 = Eq(sp_in.symbolic_max, nnz[x] - 1,
-                 implicit_dims=(field.grid.time_dim, x))
-
-        eq1 = Eq(in_ind, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
-
-        # inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
-        # Is source_mask needed /
-        inj_expr = save_src[time, sid[x, in_ind]]
-
         t = field.grid.stepping_dim
-        eq_u = Inc(field[t, x, in_ind], inj_expr, implicit_dims=(time, x, sp_in))
 
-        sparse_eqs = (eq0, eq1, eq_u)
+        if len(field.grid.dimensions) == 2:
+            x, y = field.grid.dimensions
+            time = field.grid.time_dim
+            eq0 = Eq(sp_in.symbolic_max, nnz[x] - 1,
+                     implicit_dims=(field.grid.time_dim, x))
 
-        # TODO 3D
+            eq1 = Eq(in_ind, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
+
+            # inj_u = source_mask[x, y, zind] * save_src_u[time, source_id[x, y, zind]]
+            # Is source_mask needed /
+            inj_expr = save_src[time, sid[x, in_ind]]
+
+            eq_u = Inc(field[t, x, in_ind], inj_expr, implicit_dims=(time, x, sp_in))
+
+            sparse_eqs = (eq0, eq1, eq_u)
+            return sparse_eqs
+
+        elif len(field.grid.dimensions) == 3:
+            x, y, z = field.grid.dimensions
+            time = field.grid.time_dim
+            eq0 = Eq(sp_in.symbolic_max, nnz[x, y] - 1,
+                     implicit_dims=(field.grid.time_dim, x, y))
+
+            eq1 = Eq(in_ind, sp_source_mask[x, y, sp_in],
+                     implicit_dims=(time, x, y, sp_in))
+
+            inj_expr = save_src[time, sid[x, y, in_ind]]
+
+            eq_u = Inc(field[t, x, y, in_ind], inj_expr,
+                       implicit_dims=(time, x, y, sp_in))
+
+            sparse_eqs = (eq0, eq1, eq_u)
+
         return sparse_eqs
 
     # Pickling support
