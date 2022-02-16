@@ -649,5 +649,5 @@ def test_decompose_3d():
     op2 = Operator(src.inject(field=u, expr=src))
     op2.apply(time_M=nt-1)
     norm2 = np.linalg.norm(u.data)
-
+    # import pdb;pdb.set_trace()
     assert np.isclose(norm1, norm2)

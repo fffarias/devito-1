@@ -648,7 +648,7 @@ class TestNodeParallelism(object):
         x, y, z = grid.dimensions
         t = grid.stepping_dim
 
-        f = Function(name='f', grid=grid)
+        f = Function(name='f', grid=grid, dtype=np.int32)
         u = TimeFunction(name='u', grid=grid)
         v = TimeFunction(name='v', grid=grid)
 
@@ -659,13 +659,29 @@ class TestNodeParallelism(object):
         # hence an atomic pragma is expected
         op0 = Operator(Inc(uf, 1), opt=('advanced', {'openmp': True,
                                                      'par-collapse-ncores': 1}))
-        assert 'collapse(3)' in str(op0)
-        assert 'atomic' in str(op0)
+
+        op0.apply(time_M=5)
+        print(np.linalg.norm(u.data))
+        # assert np.isclose(np.linalg.norm(u.data), 271.529, rtol=1e-5)
+
+        trees = retrieve_iteration_tree(op0)
+        assert ('omp for collapse(2) schedule(dynamic,chunk_size)'
+                in trees[1][1].pragmas[0].value)
+        assert ('omp simd aligned(f,u:32)' in trees[1][3].pragmas[0].value)
+        assert ('omp atomic update' in trees[1][3].nodes[0].exprs[1].pragmas[0].value)
 
         # Now only `x` is parallelized
         op1 = Operator([Eq(v[t, x, 0, 0], v[t, x, 0, 0] + 1), Inc(uf, 1)],
                        opt=('advanced', {'openmp': True, 'par-collapse-ncores': 1}))
-        assert 'collapse(1)' in str(op1)
+
+        op1.apply(time_M=5)
+        print(np.linalg.norm(v.data))
+        assert np.isclose(np.linalg.norm(v.data), 12.0, rtol=1e-5)
+
+        trees = retrieve_iteration_tree(op1)
+        assert ('omp for collapse(1) schedule(dynamic,chunk_size)'
+                in trees[1][1].pragmas[0].value)
+        assert ('omp simd aligned(f,u:32)' in trees[2][3].pragmas[0].value)
         assert 'atomic' not in str(op1)
 
     @pytest.mark.parametrize('exprs,simd_level,expected', [
