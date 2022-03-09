@@ -20,7 +20,7 @@ __all__ = ['DeviceNoopOperator', 'DeviceAdvOperator', 'DeviceCustomOperator',
 
 class DeviceOperatorMixin(object):
 
-    BLOCK_LEVELS = 0
+    BLOCK_LEVELS = 1
     """
     Loop blocking depth. So, 1 => "blocks", 2 => "blocks" and "sub-blocks",
     3 => "blocks", "sub-blocks", and "sub-sub-blocks", ...
