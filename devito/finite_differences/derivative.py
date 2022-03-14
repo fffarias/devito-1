@@ -314,8 +314,8 @@ class Derivative(sympy.Derivative, Differentiable):
     @property
     def evaluate(self):
         # Evaluate finite-difference.
-        # Note: evaluate and _eval_fd splitted for potential future different
-        # types of discretizations.
+        # NOTE: `evaluate` and `_eval_fd` split for potential future different
+        # types of discretizations
         return self._eval_fd(self.expr)
 
     @property
@@ -324,8 +324,8 @@ class Derivative(sympy.Derivative, Differentiable):
 
     def _eval_fd(self, expr):
         """
-        Evaluate finite difference approximation of the Derivative.
-        Evaluation is carried out via the following four steps:
+        Evaluate the finite-difference approximation of the Derivative.
+        Evaluation is carried out in four steps:
 
         - 1: Evaluate derivatives within the expression. For example given
             `f.dx * g`, `f.dx` will be evaluated first.
@@ -335,7 +335,10 @@ class Derivative(sympy.Derivative, Differentiable):
         - 4: Apply substitutions.
         """
         # Step 1: Evaluate derivatives within expression
-        expr = getattr(expr, '_eval_deriv', expr)
+        try:
+            expr = expr._eval_deriv
+        except AttributeError:
+            pass
 
         # Step 2: Evaluate FD of the new expression
         if self.side is not None and self.deriv_order == 1:
