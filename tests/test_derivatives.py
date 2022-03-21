@@ -4,9 +4,10 @@ from sympy import simplify, diff, Float
 
 from devito import (Grid, Function, TimeFunction, Eq, Operator, NODE, cos, sin,
                     ConditionalDimension, left, right, centered, div, grad)
-from devito.finite_differences import Derivative, Differentiable, Weights
+from devito.finite_differences import Derivative, Differentiable
 from devito.finite_differences.differentiable import (Add, EvalDerivative, IndexSum,
                                                       IndexDerivative)
+from devito.finite_differences.tools import Weights
 from devito.symbolics import indexify, retrieve_indexed
 from devito.types import StencilDimension
 
@@ -492,7 +493,7 @@ class TestFD(object):
             assert gi == getattr(f, 'd%s' % d.name)(x0=x0).evaluate
 
 
-class TestPartialEvalBuildingBlocks(object):
+class TestPartialEvaluation(object):
 
     def test_exceptions(self):
         grid = Grid((10,))
@@ -627,6 +628,14 @@ class TestPartialEvalBuildingBlocks(object):
         idxder = IndexDerivative(ui, w)
 
         assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2)
+
+    def test_partial_simple(self):
+        grid = Grid(shape=(4, 4))
+
+        f = TimeFunction(name='f', grid=grid, space_order=4)
+
+        term = f.dx2._evaluate(expand=False)
+        from IPython import embed; embed()
 
 
 def bypass_uneval(expr):

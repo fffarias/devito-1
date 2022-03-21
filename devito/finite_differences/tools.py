@@ -5,6 +5,8 @@ import numpy as np
 from sympy import S, finite_diff_weights, cacheit, sympify
 
 from devito.tools import Tag, as_tuple
+from devito.types.array import Array
+from devito.types.dimension import StencilDimension
 
 
 class Transpose(Tag):
@@ -139,45 +141,95 @@ def generate_fd_shortcuts(dims, so, to=0):
     return derivatives
 
 
+class Weights(Array):
+
+    """
+    The weights (or coefficients) of a finite-difference expansion.
+    """
+
+    def __init_finalize__(self, *args, **kwargs):
+        dimensions = as_tuple(kwargs.get('dimensions'))
+        weights = kwargs.get('initvalue')
+
+        assert len(dimensions) == 1
+        d = dimensions[0]
+        assert isinstance(d, StencilDimension) and d.symbolic_size == len(weights)
+        assert isinstance(weights, (list, tuple, np.ndarray))
+
+        kwargs['scope'] = 'static'
+
+        super().__init_finalize__(*args, **kwargs)
+
+    @property
+    def dimension(self):
+        return self.dimensions[0]
+
+    weights = Array.initvalue
+
+
 def symbolic_weights(function, deriv_order, indices, dim):
+    #TODO: USE Weights(...)
     return [function._coeff_symbol(indices[j], deriv_order, function, dim)
             for j in range(0, len(indices))]
 
 
 @cacheit
 def numeric_weights(deriv_order, indices, x0):
+    #TODO: USE Weights(...)
     return finite_diff_weights(deriv_order, indices, x0)[-1][-1]
 
 
-def generate_indices(func, dim, order, side=None, x0=None):
+def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
     """
     Indices for the finite-difference scheme.
 
     Parameters
     ----------
-    func: Function
-        Function that is differentiated.
-    dim: Dimension
+    expr : expr-like
+        Expression that is differentiated.
+    dim : Dimension
         Dimensions w.r.t which the derivative is taken.
-    order: Int
+    order : int
         Order of the finite-difference scheme.
-    side: Side
+    side : Side, optional
         Side of the scheme, (centered, left, right).
-    x0: Dict of {Dimension: Dimension or Expr or Number}
+    matvec : Transpose, optional
+        Forward (matvec=direct) or transpose (matvec=transpose) mode of the
+        finite difference. Defaults to `direct`.
+    x0 : dict of {Dimension: Dimension or Expr or Number}, optional
         Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
 
     Returns
     -------
     Ordered list of indices.
     """
-    # If staggered finited difference
-    if func.is_Staggered and not dim.is_Time:
-        x0, ind = generate_indices_staggered(func, dim, order, side=side, x0=x0)
+    if expr.is_Staggered and not dim.is_Time:
+        x0, indices = generate_indices_staggered(expr, dim, order, side=side, x0=x0)
     else:
         x0 = (x0 or {dim: dim}).get(dim, dim)
         # Check if called from first_derivative()
-        ind = generate_indices_cartesian(dim, order, side, x0)
-    return ind, x0
+        indices = generate_indices_cartesian(dim, order, side, x0)
+
+    # A mapper to transpose the FD (if necessary)
+    if matvec:
+        mapper = {dim.spacing: matvec.val*dim.spacing}
+    else:
+        mapper = {}
+
+    processed = []
+    for i in indices:
+        try:
+            iloc = i.xreplace(mapper)
+        except AttributeError:
+            # Pure number -> sympify
+            iloc = sympify(i).xreplace(mapper)
+
+        # Shift index due to staggering, if any
+        iloc -= expr.indices_ref[dim] - dim
+
+        processed.append(iloc)
+
+    return processed, x0
 
 
 def generate_indices_cartesian(dim, order, side, x0):
