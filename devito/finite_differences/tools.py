@@ -5,7 +5,6 @@ import numpy as np
 from sympy import S, finite_diff_weights, cacheit, sympify
 
 from devito.tools import Tag, as_tuple
-from devito.types.array import Array
 from devito.types.dimension import StencilDimension
 
 
@@ -141,30 +140,16 @@ def generate_fd_shortcuts(dims, so, to=0):
     return derivatives
 
 
-class Weights(Array):
+class Indices(tuple):
 
     """
-    The weights (or coefficients) of a finite-difference expansion.
+    The points of a finite-difference expansion.
     """
 
-    def __init_finalize__(self, *args, **kwargs):
-        dimensions = as_tuple(kwargs.get('dimensions'))
-        weights = kwargs.get('initvalue')
-
-        assert len(dimensions) == 1
-        d = dimensions[0]
-        assert isinstance(d, StencilDimension) and d.symbolic_size == len(weights)
-        assert isinstance(weights, (list, tuple, np.ndarray))
-
-        kwargs['scope'] = 'static'
-
-        super().__init_finalize__(*args, **kwargs)
-
-    @property
-    def dimension(self):
-        return self.dimensions[0]
-
-    weights = Array.initvalue
+    def __new__(cls, *indices, expr=None):
+        obj = super().__new__(cls, indices)
+        obj.expr = expr
+        return obj
 
 
 def symbolic_weights(function, deriv_order, indices, dim):
@@ -192,7 +177,7 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
     order : int
         Order of the finite-difference scheme.
     side : Side, optional
-        Side of the scheme, (centered, left, right).
+        Side of the scheme (centered, left, right).
     matvec : Transpose, optional
         Forward (matvec=direct) or transpose (matvec=transpose) mode of the
         finite difference. Defaults to `direct`.
@@ -211,6 +196,9 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
         indices = generate_indices_cartesian(dim, order, side, x0)
 
     # A mapper to transpose the FD (if necessary)
+    #TODO: THIS TO BE MOVED BACK TO indices_weights_to_fd maybe??
+    # because numeric_weights wants to see "the original indices" ???
+    #TODO: PERHAPHS I COULD INLINE THIS FUNCTION INTO make_derivative, WHY NOT?
     if matvec:
         mapper = {dim.spacing: matvec.val*dim.spacing}
     else:
@@ -234,22 +222,22 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
 
 def generate_indices_cartesian(dim, order, side, x0):
     """
-    Indices for the finite-difference scheme on a cartesian grid
+    Indices for the finite-difference scheme on a cartesian grid.
 
     Parameters
     ----------
     dim: Dimension
-        Dimensions w.r.t which the derivative is taken
-    order: Int
-        Order of the finite-difference scheme
+        Dimensions w.r.t which the derivative is taken.
+    order: int
+        Order of the finite-difference scheme.
     side: Side
-        Side of the scheme, (centered, left, right)
-    x0: Dict of {Dimension: Dimension or Expr or Number}
+        Side of the scheme (centered, left, right).
+    x0: dict of {Dimension: Dimension or expr-like or Number}
         Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
 
     Returns
     -------
-    Ordered list of indices
+    Ordered list of indices.
     """
     shift = 0
     # Shift if x0 is not on the grid
@@ -266,27 +254,32 @@ def generate_indices_cartesian(dim, order, side, x0):
         diff *= side.val
     # Indices
     if order < 2:
-        ind = [x0, x0 + diff] if offset == 0 else [x0 - offset, x0 + offset]
+        expr = None
+        indices = [x0, x0 + diff] if offset == 0 else [x0 - offset, x0 + offset]
     else:
-        ind = [(x0 + (i + shift) * diff + offset) for i in range(o_start, o_end)]
+        d = StencilDimension(name='i', _min=o_start, _max=o_end)
+        expr = x0 + (d + shift) * diff + offset
+        indices = [expr.subs(d, i) for i in range(o_start, o_end)]
+
+    from IPython import embed; embed()
     return tuple(ind)
 
 
-def generate_indices_staggered(func, dim, order, side=None, x0=None):
+def generate_indices_staggered(expr, dim, order, side=None, x0=None):
     """
-    Indices for the finite-difference scheme on a staggered grid
+    Indices for the finite-difference scheme on a staggered grid.
 
     Parameters
     ----------
-    func: Function
-        Function that is differentiated
+    expr : expr-like
+        Expression that is differentiated.
     dim: Dimension
-        Dimensions w.r.t which the derivative is taken
-    order: Int
-        Order of the finite-difference scheme
-    side: Side
-        Side of the scheme, (centered, left, right)
-    x0: Dict of {Dimension: Dimension or Expr or Number}
+        Dimensions w.r.t which the derivative is taken.
+    order: int
+        Order of the finite-difference scheme.
+    side: Side, optional
+        Side of the scheme (centered, left, right).
+    x0: dict of {Dimension: Dimension or expr-like or Number}, optional
         Origin of the scheme, ie. `x`, `x + .5 * x.spacing`, ...
 
     Returns
@@ -294,9 +287,9 @@ def generate_indices_staggered(func, dim, order, side=None, x0=None):
     Ordered list of indices
     """
     diff = dim.spacing
-    start = (x0 or {}).get(dim) or func.indices_ref[dim]
+    start = (x0 or {}).get(dim) or expr.indices_ref[dim]
     try:
-        ind0 = func.indices_ref[dim]
+        ind0 = expr.indices_ref[dim]
     except AttributeError:
         ind0 = start
     if start != ind0:

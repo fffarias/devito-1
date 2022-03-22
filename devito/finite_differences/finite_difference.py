@@ -1,9 +1,10 @@
 from sympy import sympify
 
-from devito.finite_differences.differentiable import EvalDerivative
+from devito.finite_differences.differentiable import EvalDerivative, IndexDerivative
 from devito.finite_differences.tools import (numeric_weights, symbolic_weights, left,
                                              right, generate_indices, centered, direct,
                                              transpose, check_input, check_symbolic)
+from devito.types.array import Array
 
 __all__ = ['first_derivative', 'cross_derivative', 'generic_derivative',
            'left', 'right', 'centered', 'transpose', 'generate_indices']
@@ -206,17 +207,55 @@ def generic_derivative(expr, dim, fd_order, deriv_order, matvec=direct, x0=None,
                            matvec, x0, symbolic, expand)
 
 
+class Weights(Array):
+
+    """
+    The weights (or coefficients) of a finite-difference expansion.
+    """
+
+    def __init_finalize__(self, *args, **kwargs):
+        dimensions = as_tuple(kwargs.get('dimensions'))
+        weights = kwargs.get('initvalue')
+
+        assert len(dimensions) == 1
+        d = dimensions[0]
+        assert isinstance(d, StencilDimension) and d.symbolic_size == len(weights)
+        assert isinstance(weights, (list, tuple, np.ndarray))
+
+        kwargs['scope'] = 'static'
+
+        super().__init_finalize__(*args, **kwargs)
+
+    @property
+    def dimension(self):
+        return self.dimensions[0]
+
+    weights = Array.initvalue
+
+
 def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic, expand):
     # The stencil positions
     indices, x0 = generate_indices(expr, dim, fd_order, side=side, matvec=matvec, x0=x0)
 
-    # Finite difference weights from Taylor approximation with these positions
+    # Finite difference weights from Taylor approximation given these positions
     if symbolic:
         weights = symbolic_weights(expr, deriv_order, indices, x0)
     else:
         weights = numeric_weights(deriv_order, indices, x0)
+    # TODO: enforce FD precision (lift from indices_weights_to_fd)
+    weights = Weights(...)
 
-    return indices_weights_to_fd(expr, dim, indices, weights)
+    if expand:
+        expr = indices_weights_to_fd(expr, dim, indices, weights)
+    else:
+        # TODO: reserve index, say `i0`
+        # TODO: bind `i0` to the free variable in `indices.expr`
+        #       bind here likely means subs
+
+        # indices.expr, weights
+        from IPython import embed; embed()
+
+    return expr
 
 
 #TODO: MOVE generate_indices, Weights, ... from tools to here????
