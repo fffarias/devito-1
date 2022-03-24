@@ -1,10 +1,11 @@
+import numpy as np
 from sympy import sympify
 
-from devito.finite_differences.differentiable import EvalDerivative, IndexDerivative
+from devito.finite_differences.differentiable import (EvalDerivative, IndexDerivative,
+                                                      Weights)
 from devito.finite_differences.tools import (numeric_weights, symbolic_weights, left,
                                              right, generate_indices, centered, direct,
                                              transpose, check_input, check_symbolic)
-from devito.types.array import Array
 
 __all__ = ['first_derivative', 'cross_derivative', 'generic_derivative',
            'left', 'right', 'centered', 'transpose', 'generate_indices']
@@ -207,32 +208,6 @@ def generic_derivative(expr, dim, fd_order, deriv_order, matvec=direct, x0=None,
                            matvec, x0, symbolic, expand)
 
 
-class Weights(Array):
-
-    """
-    The weights (or coefficients) of a finite-difference expansion.
-    """
-
-    def __init_finalize__(self, *args, **kwargs):
-        dimensions = as_tuple(kwargs.get('dimensions'))
-        weights = kwargs.get('initvalue')
-
-        assert len(dimensions) == 1
-        d = dimensions[0]
-        assert isinstance(d, StencilDimension) and d.symbolic_size == len(weights)
-        assert isinstance(weights, (list, tuple, np.ndarray))
-
-        kwargs['scope'] = 'static'
-
-        super().__init_finalize__(*args, **kwargs)
-
-    @property
-    def dimension(self):
-        return self.dimensions[0]
-
-    weights = Array.initvalue
-
-
 def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic, expand):
     # The stencil positions
     indices, x0 = generate_indices(expr, dim, fd_order, side=side, matvec=matvec, x0=x0)
@@ -242,45 +217,58 @@ def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic
         weights = symbolic_weights(expr, deriv_order, indices, x0)
     else:
         weights = numeric_weights(deriv_order, indices, x0)
-    # TODO: enforce FD precision (lift from indices_weights_to_fd)
-    weights = Weights(...)
+    # Enforce fixed precision FD coefficients to avoid variations in results
+    weights = [sympify(w).evalf(_PRECISION) for w in weights]
 
-    if expand:
-        expr = indices_weights_to_fd(expr, dim, indices, weights)
-    else:
+    # Transpose the FD, if necessary
+    if matvec:
+        indices = indices.scale(matvec.val)
+
+    # Shift index due to staggering, if any
+    indices = indices.shift(-(expr.indices_ref[dim] - dim))
+
+    #TODO: LOTS OF OVERLAP BETWEEN IF AND ELSE, FIX THIS...
+    if not expand and indices.expr is not None:
+        #TODO: name should be unique
+        weights = Weights(name='w', dimensions=indices.free_dim, initvalue=weights)
+
         # TODO: reserve index, say `i0`
         # TODO: bind `i0` to the free variable in `indices.expr`
         #       bind here likely means subs
 
-        # indices.expr, weights
-        from IPython import embed; embed()
-
-    return expr
-
-
-#TODO: MOVE generate_indices, Weights, ... from tools to here????
-
-
-def indices_weights_to_fd(expr, dim, indices, weights):
-    """Expression from lists of indices and weights."""
-    terms = []
-    for i, c in zip(indices, weights):
-        # Enforce fixed precision FD coefficients to avoid variations in results
-        v = sympify(c).evalf(_PRECISION)
-
         # The FD term
-        term = expr._subs(dim, i) * v
-        from IPython import embed; embed()
+        # E.g., inject `x + i*h_x` into `f(x)` s.t. `f(x + i*h_x)`
+        expr = expr._subs(dim, indices.expr)
 
         # Re-evaluate any off-the-grid Functions potentially impacted by the FD
         try:
-            term = term.evaluate
+            expr = expr.evaluate
         except AttributeError:
             # Pure number
             pass
 
-        terms.append(term)
+        deriv = IndexDerivative(expr*weights)
+    else:
+        terms = []
+        for i, c in zip(indices, weights):
+            # The FD term
+            term = expr._subs(dim, i) * c
 
-    deriv = EvalDerivative(*terms, base=expr)
+            # Re-evaluate any off-the-grid Functions potentially impacted by the FD
+            try:
+                term = term.evaluate
+            except AttributeError:
+                # Pure number
+                pass
+
+            terms.append(term)
+
+        deriv = EvalDerivative(*terms, base=expr)
+
+    return deriv
+
+
+def indices_weights_to_fd(expr, dim, indices, weights):
+    """Expression from lists of indices and weights."""
 
     return deriv

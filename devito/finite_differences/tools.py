@@ -140,27 +140,84 @@ def generate_fd_shortcuts(dims, so, to=0):
     return derivatives
 
 
-class Indices(tuple):
+class IndexSet(tuple):
 
     """
     The points of a finite-difference expansion.
     """
 
-    def __new__(cls, *indices, expr=None):
+    def __new__(cls, dim, *indices, expr=None, fd=None):
+        if fd is None:
+            try:
+                v = {d for d in expr.free_symbols if isinstance(d, StencilDimension)}
+                assert len(v) == 1
+                fd = v.pop()
+            except AttributeError:
+                pass
+
+        if not indices:
+            assert expr is not None
+            indices = [expr.subs(fd, i) for i in range(fd._min, fd._max + 1)]
+
         obj = super().__new__(cls, indices)
+        obj.dim = dim
         obj.expr = expr
+        obj.free_dim = fd
+
         return obj
+
+    def __repr__(self):
+        return "IndexSet(%s)" % ", ".join(str(i) for i in self)
+
+    @property
+    def spacing(self):
+        return self.dim.spacing
+
+    def scale(self, v):
+        """
+        Construct a new IndexSet with all indices scaled by `v`.
+        """
+        mapper = {self.spacing: v*self.spacing}
+
+        indices = []
+        for i in self:
+            try:
+                iloc = i.xreplace(mapper)
+            except AttributeError:
+                # Pure number -> sympify
+                iloc = sympify(i).xreplace(mapper)
+            indices.append(iloc)
+
+        #TODO: turn into a try-except once we're sure we don't need sympify
+        if self.expr is None:
+            expr = None
+        else:
+            expr = self.expr.xreplace(mapper)
+
+        return IndexSet(self.dim, *indices, expr=expr, fd=self.free_dim)
+
+    def shift(self, v):
+        """
+        Construct a new IndexSet with all indices shifted by `v`.
+        """
+        indices = [i + v for i in self]
+
+        #TODO: turn into a try-except once we're sure we don't need sympify
+        if self.expr is None:
+            expr = None
+        else:
+            expr = self.expr + v
+
+        return IndexSet(self.dim, *indices, expr=expr, fd=self.free_dim)
 
 
 def symbolic_weights(function, deriv_order, indices, dim):
-    #TODO: USE Weights(...)
     return [function._coeff_symbol(indices[j], deriv_order, function, dim)
             for j in range(0, len(indices))]
 
 
 @cacheit
 def numeric_weights(deriv_order, indices, x0):
-    #TODO: USE Weights(...)
     return finite_diff_weights(deriv_order, indices, x0)[-1][-1]
 
 
@@ -195,29 +252,7 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
         # Check if called from first_derivative()
         indices = generate_indices_cartesian(dim, order, side, x0)
 
-    # A mapper to transpose the FD (if necessary)
-    #TODO: THIS TO BE MOVED BACK TO indices_weights_to_fd maybe??
-    # because numeric_weights wants to see "the original indices" ???
-    #TODO: PERHAPHS I COULD INLINE THIS FUNCTION INTO make_derivative, WHY NOT?
-    if matvec:
-        mapper = {dim.spacing: matvec.val*dim.spacing}
-    else:
-        mapper = {}
-
-    processed = []
-    for i in indices:
-        try:
-            iloc = i.xreplace(mapper)
-        except AttributeError:
-            # Pure number -> sympify
-            iloc = sympify(i).xreplace(mapper)
-
-        # Shift index due to staggering, if any
-        iloc -= expr.indices_ref[dim] - dim
-
-        processed.append(iloc)
-
-    return processed, x0
+    return indices, x0
 
 
 def generate_indices_cartesian(dim, order, side, x0):
@@ -240,12 +275,9 @@ def generate_indices_cartesian(dim, order, side, x0):
     Ordered list of indices.
     """
     shift = 0
-    # Shift if x0 is not on the grid
+    # Shift if `x0` is not on the grid
     offset_c = 0 if sympify(x0).is_Integer else (dim - x0)/dim.spacing
     offset_c = np.sign(offset_c) * (offset_c % 1)
-    # left and right max offsets for indices
-    o_start = -order//2 + int(np.ceil(-offset_c))
-    o_end = order//2 + 1 - int(np.ceil(offset_c))
     offset = offset_c * dim.spacing
     # Spacing
     diff = dim.spacing
@@ -254,15 +286,16 @@ def generate_indices_cartesian(dim, order, side, x0):
         diff *= side.val
     # Indices
     if order < 2:
-        expr = None
         indices = [x0, x0 + diff] if offset == 0 else [x0 - offset, x0 + offset]
+        return IndexSet(dim, *indices)
     else:
-        d = StencilDimension(name='i', _min=o_start, _max=o_end)
-        expr = x0 + (d + shift) * diff + offset
-        indices = [expr.subs(d, i) for i in range(o_start, o_end)]
+        # Left and right max offsets for indices
+        o_min = -order//2 + int(np.ceil(-offset_c))
+        o_max = order//2 - int(np.ceil(offset_c))
 
-    from IPython import embed; embed()
-    return tuple(ind)
+        d = StencilDimension(name='i', _min=o_min, _max=o_max)
+        iexpr = x0 + (d + shift) * diff + offset
+        return IndexSet(dim, expr=iexpr)
 
 
 def generate_indices_staggered(expr, dim, order, side=None, x0=None):
@@ -293,11 +326,19 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
     except AttributeError:
         ind0 = start
     if start != ind0:
+        d = StencilDimension(name='i', _min=0, _max=order//2-1)
+        #TODO
+        raise NotImplementedError
+
         ind = [start - diff/2 - i * diff for i in range(0, order//2)][::-1]
         ind += [start + diff/2 + i * diff for i in range(0, order//2)]
         if order < 2:
             ind = [start - diff/2, start + diff/2]
     else:
+        d = StencilDimension(name='i', _min=-order//2, _max=order//2)
+        #TODO
+        raise NotImplementedError
+
         ind = [start + i * diff for i in range(-order//2, order//2+1)]
         if order < 2:
             ind = [start, start - diff]

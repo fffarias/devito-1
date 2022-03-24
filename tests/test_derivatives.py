@@ -6,8 +6,8 @@ from devito import (Grid, Function, TimeFunction, Eq, Operator, NODE, cos, sin,
                     ConditionalDimension, left, right, centered, div, grad)
 from devito.finite_differences import Derivative, Differentiable
 from devito.finite_differences.differentiable import (Add, EvalDerivative, IndexSum,
-                                                      IndexDerivative)
-from devito.finite_differences.tools import Weights
+                                                      IndexDerivative, Weights,
+                                                      diff2sympy)
 from devito.symbolics import indexify, retrieve_indexed
 from devito.types import StencilDimension
 
@@ -634,8 +634,15 @@ class TestPartialEvaluation(object):
 
         f = TimeFunction(name='f', grid=grid, space_order=4)
 
-        term = f.dx2._evaluate(expand=False)
+        term1 = f.dx2._evaluate(expand=False)
+        assert isinstance(term1, IndexDerivative)
+
+        a = diff2sympy(term1)
         from IPython import embed; embed()
+
+        term1 = term1.evaluate
+
+        term0 = f.dx2.evaluate
 
 
 def bypass_uneval(expr):

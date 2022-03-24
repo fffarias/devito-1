@@ -2,6 +2,7 @@ from collections import ChainMap
 from itertools import product
 from functools import singledispatch
 
+import numpy as np
 import sympy
 from sympy.core.add import _addsort
 from sympy.core.mul import _mulsort
@@ -12,8 +13,7 @@ from cached_property import cached_property
 from devito.finite_differences.tools import make_shift_x0
 from devito.logger import warning
 from devito.tools import as_tuple, filter_ordered, flatten, is_integer, split
-from devito.types.lazy import Evaluable
-from devito.types.utils import DimensionTuple
+from devito.types import Array, DimensionTuple, Evaluable, StencilDimension
 
 __all__ = ['Differentiable', 'IndexDerivative', 'EvalDerivative']
 
@@ -545,10 +545,43 @@ class IndexSum(DifferentiableOp):
         return super().free_symbols - set(self.dimensions)
 
 
+class Weights(Array):
+
+    """
+    The weights (or coefficients) of a finite-difference expansion.
+    """
+
+    def __init_finalize__(self, *args, **kwargs):
+        dimensions = as_tuple(kwargs.get('dimensions'))
+        weights = kwargs.get('initvalue')
+
+        assert len(dimensions) == 1
+        d = dimensions[0]
+        assert isinstance(d, StencilDimension) and d.symbolic_size == len(weights)
+        assert isinstance(weights, (list, tuple, np.ndarray))
+
+        kwargs['scope'] = 'static'
+
+        super().__init_finalize__(*args, **kwargs)
+
+    @property
+    def dimension(self):
+        return self.dimensions[0]
+
+    weights = Array.initvalue
+
+
 class IndexDerivative(IndexSum):
 
-    def __new__(cls, expr, weights, **kwargs):
-        obj = super().__new__(cls, expr*weights, weights.dimension)
+    def __new__(cls, expr, **kwargs):
+        try:
+            weights = expr.find(Weights).pop()
+        except KeyError:
+            raise ValueError("Couldn't find Weights")
+        if not (expr.is_Mul and len(expr.args) == 2):
+            raise ValueError("Expect expr*weights, got `%s` instead" % str(expr))
+
+        obj = super().__new__(cls, expr, weights.dimension)
         obj._weights = weights
 
         return obj
