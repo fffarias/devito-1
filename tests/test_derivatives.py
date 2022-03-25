@@ -625,24 +625,26 @@ class TestPartialEvaluation(object):
         ui = u.subs(x, x + i*x.spacing)
         w = Weights(name='w0', dimensions=i, initvalue=[-0.5, 0, 0.5])
 
-        idxder = IndexDerivative(ui, w)
+        idxder = IndexDerivative(ui*w, w.dimension)
 
         assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2)
 
-    def test_partial_simple(self):
+    def test_partial_simple_(self):
         grid = Grid(shape=(4, 4))
 
         f = TimeFunction(name='f', grid=grid, space_order=4)
 
+        term0 = f.dx2.evaluate
+        assert isinstance(term0, EvalDerivative)
+
         term1 = f.dx2._evaluate(expand=False)
         assert isinstance(term1, IndexDerivative)
-
-        a = diff2sympy(term1)
-        from IPython import embed; embed()
-
         term1 = term1.evaluate
+        assert isinstance(term1, Add)  # devito.fd.Add
 
-        term0 = f.dx2.evaluate
+        # Check that the first partially evaluated then fully evaluated
+        # `term1` matches up the fully evaluated `term0`
+        assert Add(*term0.args) == term1
 
 
 def bypass_uneval(expr):

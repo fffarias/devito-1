@@ -1,4 +1,3 @@
-import numpy as np
 from sympy import sympify
 
 from devito.finite_differences.differentiable import (EvalDerivative, IndexDerivative,
@@ -247,7 +246,7 @@ def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic
             # Pure number
             pass
 
-        deriv = IndexDerivative(expr*weights)
+        deriv = IndexDerivative(expr*weights, weights.dimension)
     else:
         terms = []
         for i, c in zip(indices, weights):
@@ -264,11 +263,5 @@ def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic
             terms.append(term)
 
         deriv = EvalDerivative(*terms, base=expr)
-
-    return deriv
-
-
-def indices_weights_to_fd(expr, dim, indices, weights):
-    """Expression from lists of indices and weights."""
 
     return deriv

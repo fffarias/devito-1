@@ -573,7 +573,7 @@ class Weights(Array):
 
 class IndexDerivative(IndexSum):
 
-    def __new__(cls, expr, **kwargs):
+    def __new__(cls, expr, dimensions, **kwargs):
         try:
             weights = expr.find(Weights).pop()
         except KeyError:
@@ -581,7 +581,7 @@ class IndexDerivative(IndexSum):
         if not (expr.is_Mul and len(expr.args) == 2):
             raise ValueError("Expect expr*weights, got `%s` instead" % str(expr))
 
-        obj = super().__new__(cls, expr, weights.dimension)
+        obj = super().__new__(cls, expr, dimensions)
         obj._weights = weights
 
         return obj
