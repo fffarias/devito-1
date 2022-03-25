@@ -157,7 +157,7 @@ class IndexSet(tuple):
 
         if not indices:
             assert expr is not None
-            indices = [expr.subs(fd, float(i)) for i in range(fd._min, fd._max + 1)]
+            indices = [expr.subs(fd, i) for i in range(fd._min, fd._max + 1)]
 
         obj = super().__new__(cls, indices)
         obj.dim = dim

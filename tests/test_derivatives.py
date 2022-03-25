@@ -333,15 +333,15 @@ class TestFD(object):
 
     @pytest.mark.parametrize('so, expected', [
         (2, 'u(x)/h_x - 1.0*u(x - 1.0*h_x)/h_x'),
-        (4, '1.125*u(x)/h_x + 0.0416666667*u(x - 2.0*h_x)/h_x - '
-            '1.125*u(x - 1.0*h_x)/h_x - 0.0416666667*u(x + 1.0*h_x)/h_x'),
-        (6, '1.171875*u(x)/h_x - 0.0046875*u(x - 3.0*h_x)/h_x + '
-            '0.0651041667*u(x - 2.0*h_x)/h_x - 1.171875*u(x - 1.0*h_x)/h_x - '
-            '0.0651041667*u(x + 1.0*h_x)/h_x + 0.0046875*u(x + 2.0*h_x)/h_x'),
-        (8, '1.19628906*u(x)/h_x + 0.000697544643*u(x - 4.0*h_x)/h_x - '
-            '0.0095703125*u(x - 3.0*h_x)/h_x + 0.0797526042*u(x - 2.0*h_x)/h_x - '
-            '1.19628906*u(x - 1.0*h_x)/h_x - 0.0797526042*u(x + 1.0*h_x)/h_x + '
-            '0.0095703125*u(x + 2.0*h_x)/h_x - 0.000697544643*u(x + 3.0*h_x)/h_x')])
+        (4, '1.125*u(x)/h_x + 0.0416666667*u(x - 2*h_x)/h_x - '
+            '1.125*u(x - h_x)/h_x - 0.0416666667*u(x + h_x)/h_x'),
+        (6, '1.171875*u(x)/h_x - 0.0046875*u(x - 3*h_x)/h_x + '
+            '0.0651041667*u(x - 2*h_x)/h_x - 1.171875*u(x - h_x)/h_x - '
+            '0.0651041667*u(x + h_x)/h_x + 0.0046875*u(x + 2*h_x)/h_x'),
+        (8, '1.19628906*u(x)/h_x + 0.000697544643*u(x - 4*h_x)/h_x - '
+            '0.0095703125*u(x - 3*h_x)/h_x + 0.0797526042*u(x - 2*h_x)/h_x - '
+            '1.19628906*u(x - h_x)/h_x - 0.0797526042*u(x + h_x)/h_x + '
+            '0.0095703125*u(x + 2*h_x)/h_x - 0.000697544643*u(x + 3*h_x)/h_x')])
     def test_fd_new_x0(self, so, expected):
         grid = Grid((10,))
         x = grid.dimensions[0]
@@ -627,7 +627,7 @@ class TestPartialEvaluation(object):
 
         idxder = IndexDerivative(ui*w, w.dimension)
 
-        assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2.)
+        assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2)
 
     def test_partial_simple(self):
         grid = Grid(shape=(4, 4))
