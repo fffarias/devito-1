@@ -328,15 +328,16 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
     except AttributeError:
         ind0 = start
     if start != ind0:
-        d = StencilDimension(name='i', _min=0, _max=order//2-1)
-        #TODO
-        raise NotImplementedError
-
         if order < 2:
-            ind = [start - diff/2, start + diff/2]
+            indices = [start - diff/2, start + diff/2]
+            indices = IndexSet(dim, indices)
         else:
-            ind = [start - diff/2 - i * diff for i in range(0, order//2)][::-1]
-            ind += [start + diff/2 + i * diff for i in range(0, order//2)]
+            o_min = -order//2+1
+            o_max = order//2
+
+            d = StencilDimension(name='i', _min=o_min, _max=o_max)
+            iexpr = start - diff/2 + d * diff
+            indices = IndexSet(dim, expr=iexpr)
     else:
         if order < 2:
             indices = [start, start - diff]
