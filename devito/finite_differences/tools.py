@@ -146,7 +146,7 @@ class IndexSet(tuple):
     The points of a finite-difference expansion.
     """
 
-    def __new__(cls, dim, *indices, expr=None, fd=None):
+    def __new__(cls, dim, indices=None, expr=None, fd=None):
         if fd is None:
             try:
                 v = {d for d in expr.free_symbols if isinstance(d, StencilDimension)}
@@ -157,7 +157,7 @@ class IndexSet(tuple):
 
         if not indices:
             assert expr is not None
-            indices = [expr.subs(fd, i) for i in range(fd._min, fd._max + 1)]
+            indices = [expr.subs(fd, float(i)) for i in range(fd._min, fd._max + 1)]
 
         obj = super().__new__(cls, indices)
         obj.dim = dim
@@ -194,7 +194,7 @@ class IndexSet(tuple):
         else:
             expr = self.expr.xreplace(mapper)
 
-        return IndexSet(self.dim, *indices, expr=expr, fd=self.free_dim)
+        return IndexSet(self.dim, indices, expr=expr, fd=self.free_dim)
 
     def shift(self, v):
         """
@@ -208,7 +208,7 @@ class IndexSet(tuple):
         else:
             expr = self.expr + v
 
-        return IndexSet(self.dim, *indices, expr=expr, fd=self.free_dim)
+        return IndexSet(self.dim, indices, expr=expr, fd=self.free_dim)
 
 
 def symbolic_weights(function, deriv_order, indices, dim):
@@ -243,7 +243,7 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
 
     Returns
     -------
-    Ordered list of indices.
+    An IndexSet, representing an ordered list of indices.
     """
     if expr.is_Staggered and not dim.is_Time:
         x0, indices = generate_indices_staggered(expr, dim, order, side=side, x0=x0)
@@ -251,6 +251,8 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
         x0 = (x0 or {dim: dim}).get(dim, dim)
         # Check if called from first_derivative()
         indices = generate_indices_cartesian(dim, order, side, x0)
+
+    assert isinstance(indices, IndexSet)
 
     return indices, x0
 
@@ -272,7 +274,7 @@ def generate_indices_cartesian(dim, order, side, x0):
 
     Returns
     -------
-    Ordered list of indices.
+    An IndexSet, representing an ordered list of indices.
     """
     shift = 0
     # Shift if `x0` is not on the grid
@@ -287,7 +289,7 @@ def generate_indices_cartesian(dim, order, side, x0):
     # Indices
     if order < 2:
         indices = [x0, x0 + diff] if offset == 0 else [x0 - offset, x0 + offset]
-        return IndexSet(dim, *indices)
+        return IndexSet(dim, indices)
     else:
         # Left and right max offsets for indices
         o_min = -order//2 + int(np.ceil(-offset_c))
@@ -317,7 +319,7 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
 
     Returns
     -------
-    Ordered list of indices
+    An IndexSet, representing an ordered list of indices.
     """
     diff = dim.spacing
     start = (x0 or {}).get(dim) or expr.indices_ref[dim]
@@ -330,20 +332,24 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
         #TODO
         raise NotImplementedError
 
-        ind = [start - diff/2 - i * diff for i in range(0, order//2)][::-1]
-        ind += [start + diff/2 + i * diff for i in range(0, order//2)]
         if order < 2:
             ind = [start - diff/2, start + diff/2]
+        else:
+            ind = [start - diff/2 - i * diff for i in range(0, order//2)][::-1]
+            ind += [start + diff/2 + i * diff for i in range(0, order//2)]
     else:
-        d = StencilDimension(name='i', _min=-order//2, _max=order//2)
-        #TODO
-        raise NotImplementedError
-
-        ind = [start + i * diff for i in range(-order//2, order//2+1)]
         if order < 2:
-            ind = [start, start - diff]
+            indices = [start, start - diff]
+            indices = IndexSet(dim, indices)
+        else:
+            o_min = -order//2
+            o_max = order//2
 
-    return start, tuple(ind)
+            d = StencilDimension(name='i', _min=o_min, _max=o_max)
+            iexpr = start + d * diff
+            indices = IndexSet(dim, expr=iexpr)
+
+    return start, indices
 
 
 def make_shift_x0(shift, ndim):

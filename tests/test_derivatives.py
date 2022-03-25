@@ -627,9 +627,9 @@ class TestPartialEvaluation(object):
 
         idxder = IndexDerivative(ui*w, w.dimension)
 
-        assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2)
+        assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2.)
 
-    def test_partial_simple_(self):
+    def test_partial_simple(self):
         grid = Grid(shape=(4, 4))
 
         f = TimeFunction(name='f', grid=grid, space_order=4)

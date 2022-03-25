@@ -530,14 +530,17 @@ class IndexSum(DifferentiableOp):
     def dimensions(self):
         return self._dimensions
 
+    def _generate_indices(self):
+        values = product(*[list(d.range) for d in self.dimensions])
+        for i in values:
+            mapper = dict(zip(self.dimensions, i))
+            yield mapper
+
     def _evaluate(self, **kwargs):
         expr = self.expr._evaluate(**kwargs)
 
-        values = product(*[list(d.range) for d in self.dimensions])
-        terms = []
-        for i in values:
-            mapper = dict(zip(self.dimensions, i))
-            terms.append(expr.xreplace(mapper))
+        terms = [expr.xreplace(mapper) for mapper in self._generate_indices()]
+
         return sum(terms)
 
     @property
@@ -591,14 +594,28 @@ class IndexDerivative(IndexSum):
         return self._weights
 
     def _evaluate(self, **kwargs):
-        expr = super()._evaluate(**kwargs)
+        a, b = self.expr.args
+        if b is self.weights:
+            expr, weights = a, b
+        else:
+            expr, weights = b, a
 
-        w = self.weights
-        d = w.dimension
-        mapper = {w.subs(d, i): w.weights[n] for n, i in enumerate(d.range)}
-        expr = expr.xreplace(mapper)
+        expr = expr._evaluate(**kwargs)
 
-        return expr
+        terms = []
+        for n, m in enumerate(self._generate_indices()):
+            assert len(m) == 1
+
+            # Enforce float multipliers
+            mapper = {k: float(v) for k, v in m.items()}
+            e = expr.xreplace(mapper)
+
+            # The symbolic weight
+            w = weights.weights[n]
+
+            terms.append(e*w)
+
+        return sum(terms)
 
 
 class EvalDerivative(DifferentiableOp, sympy.Add):
