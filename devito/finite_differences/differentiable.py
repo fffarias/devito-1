@@ -517,8 +517,8 @@ class IndexSum(DifferentiableOp):
         return obj
 
     def __repr__(self):
-        return "IndexSum(%s, (%s))" % (self.expr,
-                                       ', '.join(d.name for d in self.dimensions))
+        return "%s(%s, (%s))" % (self.__class__.__name__, self.expr,
+                                 ', '.join(d.name for d in self.dimensions))
 
     __str__ = __repr__
 
@@ -532,6 +532,9 @@ class IndexSum(DifferentiableOp):
 
     def _evaluate(self, **kwargs):
         expr = self.expr._evaluate(**kwargs)
+
+        if not kwargs.get('expand', True):
+            return self.func(expr, self.dimensions)
 
         values = product(*[list(d.range) for d in self.dimensions])
         terms = []
@@ -592,6 +595,9 @@ class IndexDerivative(IndexSum):
 
     def _evaluate(self, **kwargs):
         expr = super()._evaluate(**kwargs)
+
+        if not kwargs.get('expand', True):
+            return expr
 
         w = self.weights
         d = w.dimension

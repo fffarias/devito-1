@@ -2,14 +2,11 @@ from collections import OrderedDict
 from collections.abc import Iterable
 
 from cached_property import cached_property
-import numpy as np
 import sympy
 
-from devito.finite_differences.finite_difference import (generic_derivative,
-                                                         first_derivative,
-                                                         cross_derivative)
-from devito.finite_differences.differentiable import Differentiable
-from devito.finite_differences.tools import direct, transpose
+from .finite_difference import generic_derivative, first_derivative, cross_derivative
+from .differentiable import Differentiable
+from .tools import direct, transpose
 from devito.tools import as_mapper, as_tuple, filter_ordered, frozendict
 from devito.types.utils import DimensionTuple
 

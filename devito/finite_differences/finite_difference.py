@@ -1,10 +1,9 @@
 from sympy import sympify
 
-from devito.finite_differences.differentiable import (EvalDerivative, IndexDerivative,
-                                                      Weights)
-from devito.finite_differences.tools import (numeric_weights, symbolic_weights, left,
-                                             right, generate_indices, centered, direct,
-                                             transpose, check_input, check_symbolic)
+from .differentiable import EvalDerivative, IndexDerivative, Weights
+from .tools import (numeric_weights, symbolic_weights, left, right,
+                    generate_indices, centered, direct, transpose,
+                    check_input, check_symbolic)
 
 __all__ = ['first_derivative', 'cross_derivative', 'generic_derivative',
            'left', 'right', 'centered', 'transpose', 'generate_indices']
@@ -226,22 +225,16 @@ def make_derivative(expr, dim, fd_order, deriv_order, side, matvec, x0, symbolic
     # Shift index due to staggering, if any
     indices = indices.shift(-(expr.indices_ref[dim] - dim))
 
-    #TODO: LOTS OF OVERLAP BETWEEN IF AND ELSE, FIX THIS...
     if not expand and indices.expr is not None:
-        #TODO: name should be unique
         weights = Weights(name='w', dimensions=indices.free_dim, initvalue=weights)
 
-        # TODO: reserve index, say `i0`
-        # TODO: bind `i0` to the free variable in `indices.expr`
-        #       bind here likely means subs
-
-        # The FD term
-        # E.g., inject `x + i*h_x` into `f(x)` s.t. `f(x + i*h_x)`
+        # Inject the StencilDimension
+        # E.g. `x + i*h_x` into `f(x)` s.t. `f(x + i*h_x)`
         expr = expr._subs(dim, indices.expr)
 
         # Re-evaluate any off-the-grid Functions potentially impacted by the FD
         try:
-            expr = expr.evaluate
+            expr = expr._evaluate(expand=False)
         except AttributeError:
             # Pure number
             pass

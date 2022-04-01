@@ -188,11 +188,10 @@ class IndexSet(tuple):
                 iloc = sympify(i).xreplace(mapper)
             indices.append(iloc)
 
-        #TODO: turn into a try-except once we're sure we don't need sympify
-        if self.expr is None:
-            expr = None
-        else:
+        try:
             expr = self.expr.xreplace(mapper)
+        except AttributeError:
+            expr = None
 
         return IndexSet(self.dim, indices, expr=expr, fd=self.free_dim)
 
@@ -202,13 +201,20 @@ class IndexSet(tuple):
         """
         indices = [i + v for i in self]
 
-        #TODO: turn into a try-except once we're sure we don't need sympify
-        if self.expr is None:
-            expr = None
-        else:
+        try:
             expr = self.expr + v
+        except TypeError:
+            expr = None
 
         return IndexSet(self.dim, indices, expr=expr, fd=self.free_dim)
+
+
+def make_stencil_dimension(expr, _min, _max):
+    """
+    Create a StencilDimension for `expr` with unique name.
+    """
+    n = len(expr.find(StencilDimension))
+    return StencilDimension(name='i%d' % n, _min=_min, _max=_max)
 
 
 def symbolic_weights(function, deriv_order, indices, dim):
@@ -250,19 +256,21 @@ def generate_indices(expr, dim, order, side=None, matvec=None, x0=None):
     else:
         x0 = (x0 or {dim: dim}).get(dim, dim)
         # Check if called from first_derivative()
-        indices = generate_indices_cartesian(dim, order, side, x0)
+        indices = generate_indices_cartesian(expr, dim, order, side, x0)
 
     assert isinstance(indices, IndexSet)
 
     return indices, x0
 
 
-def generate_indices_cartesian(dim, order, side, x0):
+def generate_indices_cartesian(expr, dim, order, side, x0):
     """
     Indices for the finite-difference scheme on a cartesian grid.
 
     Parameters
     ----------
+    expr : expr-like
+        Expression that is differentiated.
     dim: Dimension
         Dimensions w.r.t which the derivative is taken.
     order: int
@@ -295,7 +303,7 @@ def generate_indices_cartesian(dim, order, side, x0):
         o_min = -order//2 + int(np.ceil(-offset_c))
         o_max = order//2 - int(np.ceil(offset_c))
 
-        d = StencilDimension(name='i', _min=o_min, _max=o_max)
+        d = make_stencil_dimension(expr, o_min, o_max)
         iexpr = x0 + (d + shift) * diff + offset
         return IndexSet(dim, expr=iexpr)
 
@@ -335,7 +343,7 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
             o_min = -order//2+1
             o_max = order//2
 
-            d = StencilDimension(name='i', _min=o_min, _max=o_max)
+            d = make_stencil_dimension(expr, o_min, o_max)
             iexpr = start - diff/2 + d * diff
             indices = IndexSet(dim, expr=iexpr)
     else:
@@ -346,7 +354,7 @@ def generate_indices_staggered(expr, dim, order, side=None, x0=None):
             o_min = -order//2
             o_max = order//2
 
-            d = StencilDimension(name='i', _min=o_min, _max=o_max)
+            d = make_stencil_dimension(expr, o_min, o_max)
             iexpr = start + d * diff
             indices = IndexSet(dim, expr=iexpr)
 

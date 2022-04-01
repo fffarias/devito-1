@@ -6,8 +6,7 @@ from devito import (Grid, Function, TimeFunction, Eq, Operator, NODE, cos, sin,
                     ConditionalDimension, left, right, centered, div, grad)
 from devito.finite_differences import Derivative, Differentiable
 from devito.finite_differences.differentiable import (Add, EvalDerivative, IndexSum,
-                                                      IndexDerivative, Weights,
-                                                      diff2sympy)
+                                                      IndexDerivative, Weights)
 from devito.symbolics import indexify, retrieve_indexed
 from devito.types import StencilDimension
 
@@ -493,7 +492,7 @@ class TestFD(object):
             assert gi == getattr(f, 'd%s' % d.name)(x0=x0).evaluate
 
 
-class TestPartialEvaluation(object):
+class TestTwoStageEvaluation(object):
 
     def test_exceptions(self):
         grid = Grid((10,))
@@ -629,7 +628,7 @@ class TestPartialEvaluation(object):
 
         assert idxder.evaluate == -0.5*u + 0.5*ui.subs(i, 2)
 
-    def test_partial_simple(self):
+    def test_dx2(self):
         grid = Grid(shape=(4, 4))
 
         f = TimeFunction(name='f', grid=grid, space_order=4)
@@ -645,6 +644,23 @@ class TestPartialEvaluation(object):
         # Check that the first partially evaluated then fully evaluated
         # `term1` matches up the fully evaluated `term0`
         assert Add(*term0.args) == term1
+
+    def test_dxdy(self):
+        grid = Grid(shape=(4, 4))
+
+        f = TimeFunction(name='f', grid=grid, space_order=4)
+
+        term0 = f.dx.dy.evaluate
+        assert isinstance(term0, EvalDerivative)
+
+        term1 = f.dx.dy._evaluate(expand=False)
+        assert isinstance(term1, IndexDerivative)
+        term1 = term1.evaluate
+        assert isinstance(term1, Add)  # devito.fd.Add
+
+        # Through expansion and casting we also check that `term0`
+        # is indeed mathematically equivalent to `term1`
+        assert Add(*term0.expand().args) == term1.expand()
 
 
 def bypass_uneval(expr):
