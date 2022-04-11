@@ -447,13 +447,10 @@ class PragmaDeviceAwareTransformer(DeviceAwareMixin, PragmaShmTransformer):
             # collapsable = self._find_collapsable(root, candidates)
             ncollapse = 1 + len(collapsable)
             #    body = self.DeviceIteration(nthreads=self.thread_limit, **root.args)
-            if nthreads is None and not thread_limit:
+            if not nthreads and not thread_limit:
                 body = self.DeviceIteration(gpu_fit=self.gpu_fit, ncollapse=ncollapse,
                                             **root.args)
-            elif nthreads is None and threshold > thread_limit:
-                body = self.DeviceIteration(gpu_fit=self.gpu_fit, nthreads=threshold,
-                                            ncollapse=ncollapse, **root.args)
-            elif nthreads and threshold > thread_limit:
+            elif not nthreads and threshold > thread_limit:
                 body = self.DeviceIteration(gpu_fit=self.gpu_fit, nthreads=threshold,
                                             ncollapse=ncollapse, **root.args)
             else:

@@ -69,13 +69,14 @@ class OmpIteration(ParallelIteration):
 class DeviceOmpIteration(OmpIteration):
 
     @classmethod
-    def _make_construct(cls, nthreads=None, parallel=False, **kwargs):
+    def _make_construct(cls, nthreads=None, **kwargs):
         if nthreads is None:
             return 'omp target teams distribute parallel for'
-        elif nthreads > 10:
-            return 'omp target teams distribute thread_limit({})'.format(nthreads)
-        else:
+        elif nthreads == 1:
             return 'omp parallel for'
+        else:
+            return 'omp target teams distribute thread_limit({})'.format(nthreads)
+
 
     @classmethod
     def _make_clauses(cls, **kwargs):
