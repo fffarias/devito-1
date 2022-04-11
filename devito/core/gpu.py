@@ -201,10 +201,10 @@ class DeviceAdvOperator(DeviceOperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Blocking to define thread blocks
-        # if options['blocklazy']:
-        #     clusters = blocking(clusters, sregistry, options)
+        if options['blocklazy']:
+            clusters = blocking(clusters, sregistry, options)
         
-        clusters = blocking(clusters, sregistry, options)
+        # clusters = blocking(clusters, sregistry, options)
 
         return clusters
 
