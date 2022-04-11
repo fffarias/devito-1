@@ -56,7 +56,7 @@ class DeviceOperatorMixin(object):
     """
 
     GPU_FIT = 'all-fallback'
-    THREAD_LIMIT = 1
+    THREAD_LIMIT = None
     """
     Assuming all functions fit into the gpu memory.
     """
@@ -203,8 +203,6 @@ class DeviceAdvOperator(DeviceOperatorMixin, CoreOperator):
         # Blocking to define thread blocks
         if options['blocklazy']:
             clusters = blocking(clusters, sregistry, options)
-        
-        # clusters = blocking(clusters, sregistry, options)
 
         return clusters
 

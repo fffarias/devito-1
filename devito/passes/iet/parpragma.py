@@ -10,8 +10,9 @@ from devito.ir import (Conditional, DummyEq, Dereference, Expression, Expression
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB, LangTransformer, DeviceAwareMixin
 from devito.symbolics import INT, ccode
-from devito.tools import as_tuple, prod
+from devito.tools import as_tuple, prod, split
 from devito.types import Symbol, NThreadsBase
+
 
 __all__ = ['PragmaSimdTransformer', 'PragmaShmTransformer',
            'PragmaDeviceAwareTransformer', 'PragmaLangBB']
@@ -355,13 +356,20 @@ class PragmaShmTransformer(PragmaSimdTransformer):
             if not candidates:
                 continue
 
-            # Outer parallelism
-            root, partree = self._make_partree(candidates)
-            if partree is None or root in mapper:
-                continue
+            # Find out whether blocked loops exist and split them in inner and outer
+            iterations = [i for i in tree if i.dim.is_Block]
+            outer, inner = split(iterations, lambda i: not i.dim.parent.is_Block)
 
-            # Nested parallelism
-            partree = self._make_nested_partree(partree)
+            if inner and outer:
+                # Nested parallelism
+                root, partree = self._make_partree(candidates, thread_limit=1)
+                if partree is None or root in mapper:
+                    continue
+                partree = self._make_nested_partree(partree)
+            else:
+                root, partree = self._make_partree(candidates)
+                if partree is None or root in mapper:
+                    continue
 
             # Handle reductions
             partree = self._make_reductions(partree)
