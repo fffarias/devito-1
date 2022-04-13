@@ -4,6 +4,8 @@ import cgen as c
 from sympy import Or
 
 from devito.data import FULL
+from devito.ir import (WaitLock, WithLock, FetchUpdate, FetchPrefetch,
+                       PrefetchUpdate, WaitPrefetch, Delete)
 from devito.ir.iet import (Call, Callable, Conditional, List, SyncSpot, FindNodes,
                            Transformer, BlankLine, BusyWait, Pragma, PragmaTransfer,
                            DummyExpr, derive_parameters, make_thread_ctx)
@@ -11,8 +13,7 @@ from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB
 from devito.symbolics import CondEq, CondNe, FieldFromComposite
 from devito.tools import as_mapper, filter_ordered, filter_sorted, flatten, is_integer
-from devito.types import (WaitLock, WithLock, FetchUpdate, FetchPrefetch,
-                          PrefetchUpdate, WaitPrefetch, Delete, SharedData)
+from devito.types import SharedData
 
 __init__ = ['Orchestrator']
 
@@ -56,10 +57,8 @@ class Orchestrator(object):
 
         preactions = [BlankLine]
         for s in sync_ops:
-            imask = [s.handle.indices[d] if d.root in s.lock.locked_dimensions else FULL
-                     for d in s.target.dimensions]
             update = PragmaTransfer(self.lang._map_update_host_async, s.target,
-                                    imask=imask, queueid=SharedData._field_id)
+                                    imask=s.imask, queueid=SharedData._field_id)
             preactions.append(update)
         wait = self.lang._map_wait(SharedData._field_id)
         if wait is not None:
@@ -99,10 +98,8 @@ class Orchestrator(object):
             # which stems from the originating Cluster's guards
             assert s.fcond is None
 
-            imask = [(s.tstore, s.size) if d.root is s.dim.root else FULL
-                     for d in s.dimensions]
             postactions.append(
-                PragmaTransfer(self.lang._map_update_device, s.target, imask=imask)
+                PragmaTransfer(self.lang._map_update_device, s.target, imask=s.imask)
             )
 
         # Turn init IET into a Callable
@@ -130,10 +127,8 @@ class Orchestrator(object):
             # which stems from the originating Cluster's guards
             assert s.pcond is None
 
-            imask = [(s.tstore, s.size) if d.root is s.dim.root else FULL
-                     for d in s.dimensions]
             postactions.append(PragmaTransfer(self.lang._map_update_device_async,
-                                              s.target, imask=imask, queueid=fid))
+                                              s.target, imask=s.imask, queueid=fid))
         wait = self.lang._map_wait(fid)
         if wait is not None:
             postactions.append(Pragma(wait))
@@ -181,27 +176,19 @@ class Orchestrator(object):
         prefetches = []
         presents = []
         for s in sync_ops:
-            f = s.function
-            dimensions = s.dimensions
-            fc = s.fetch
-            ifc = s.ifetch
-            pfc = s.pfetch
-            fcond = s.fcond
-            pcond = s.pcond
-
             # Construct init IET
-            imask = [(ifc, s.size) if d.root is s.dim.root else FULL for d in dimensions]
-            fetch = PragmaTransfer(self.lang._map_to, f, imask=imask)
-            fetches.append(Conditional(fcond, fetch))
+            fetch = PragmaTransfer(self.lang._map_to, s.function, imask=s.iimask)
+            fetches.append(Conditional(s.fcond, fetch))
 
             # Construct present clauses
-            imask = [(fc, s.size) if d.root is s.dim.root else FULL for d in dimensions]
-            presents.append(PragmaTransfer(self.lang._map_present, f, imask=imask))
+            presents.append(
+                PragmaTransfer(self.lang._map_present, s.function, imask=s.pimask)
+            )
 
             # Construct prefetch IET
-            imask = [(pfc, s.size) if d.root is s.dim.root else FULL for d in dimensions]
-            prefetch = PragmaTransfer(self.lang._map_to_wait, f, imask=imask, queueid=fid)
-            prefetches.append(Conditional(pcond, prefetch))
+            prefetch = PragmaTransfer(self.lang._map_to_wait, s.function,
+                                      imask=s.imask, queueid=fid)
+            prefetches.append(Conditional(s.pcond, prefetch))
 
         # Turn init IET into a Callable
         functions = filter_ordered(s.function for s in sync_ops)
@@ -250,10 +237,8 @@ class Orchestrator(object):
         # Construct deletion clauses
         deletions = []
         for s in sync_ops:
-            dimensions = s.dimensions
-            fc = s.fetch
-
-            imask = [(fc, s.size) if d.root is s.dim.root else FULL for d in dimensions]
+            imask = [(s.fetch, s.size) if d.root is s.dim.root else FULL
+                     for d in s.dimensions]
             deletions.append(
                 PragmaTransfer(self.lang._map_delete, s.function, imask=imask)
             )
