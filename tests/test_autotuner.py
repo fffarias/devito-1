@@ -348,23 +348,15 @@ def test_wavefront_blocking():
     op = Operator(Eq(u.forward, u + 1), opt=opt)
 
     # 'basic' mode
-    op.apply(time_M=30, autotune='basic')
-    assert op._state['autotuning'][0]['runs'] == 7
+    op.apply(time_M=64, autotune='basic')
+    assert op._state['autotuning'][0]['runs'] == 4
     assert op._state['autotuning'][0]['tpr'] == options['squeezer'] + 1
     assert len(op._state['autotuning'][0]['tuned']) == 5
 
     # 'aggressive' mode
-    op.apply(time_M=20, autotune='aggressive')
-    assert op._state['autotuning'][0]['runs'] == 7
-    assert op._state['autotuning'][1]['runs'] == 37
-    assert op._state['autotuning'][0]['tpr'] == 30
-    assert op._state['autotuning'][1]['tpr'] == 20
-    assert len(op._state['autotuning'][1]['tuned']) == 5
-
-    # 'basic' mode, more timesteps
     op.apply(time_M=64, autotune='aggressive')
-    assert op._state['autotuning'][0]['runs'] == 7
-    assert op._state['autotuning'][1]['runs'] == 37
-    assert op._state['autotuning'][0]['tpr'] == 30
-    assert op._state['autotuning'][1]['tpr'] == 20
+    assert op._state['autotuning'][0]['runs'] == 4
+    assert op._state['autotuning'][1]['runs'] == 16
+    assert op._state['autotuning'][0]['tpr'] == 64
+    assert op._state['autotuning'][1]['tpr'] == 64
     assert len(op._state['autotuning'][1]['tuned']) == 5
