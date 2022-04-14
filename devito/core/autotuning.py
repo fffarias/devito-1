@@ -88,6 +88,7 @@ def autotune(operator, args, level, mode):
         options['squeezer'] = t_squeezer
         stepper = steppers.pop()
         timesteps = init_time_bounds(stepper, at_args, args)
+        import pdb;pdb.set_trace()
         if timesteps is None:
             return args, {}
     else:
@@ -147,7 +148,7 @@ def autotune(operator, args, level, mode):
             update_time_bounds(stepper, at_args, timesteps, mode)
             timer.reset()
 
-    # The best variant is the one that for a given number of threads had the minium
+    # The best variant is the one that for a given number of threads had the minimum
     # turnaround time
     try:
         runs = 0
@@ -380,8 +381,8 @@ def generate_nthreads(nthreads, args, level):
 
 options = {
     'squeezer': 4,
-    'blocksize-l0': (8, 16, 24, 32, 64, 96, 128),
-    'blocksize-l1': (8, 16, 32),
+    'blocksize-l0': (8, 16, 24, 32, 64),
+    'blocksize-l1': (4, 8, 16, 32),
 }
 """Autotuning options."""
 
