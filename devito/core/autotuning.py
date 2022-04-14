@@ -130,7 +130,7 @@ def autotune(operator, args, level, mode):
             run = [(k, v) for k, v in bs + nt if k in at_args]
             at_args.update(dict(run))
 
-            if run[0][0] == 'time0_blk0_size' and run[0][1] < 63:
+            if run[0][0] == 'time0_blk0_size' and (run[0][1] < 63 or run[0][1] > 65):
                 continue
 
             # Drop run if not at least one block per thread
