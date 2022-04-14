@@ -88,7 +88,6 @@ def autotune(operator, args, level, mode):
         options['squeezer'] = t_squeezer
         stepper = steppers.pop()
         timesteps = init_time_bounds(stepper, at_args, args)
-        import pdb;pdb.set_trace()
         if timesteps is None:
             return args, {}
     else:
@@ -130,6 +129,9 @@ def autotune(operator, args, level, mode):
             # Update `at_args` to use the new tunable arguments
             run = [(k, v) for k, v in bs + nt if k in at_args]
             at_args.update(dict(run))
+
+            if run[0][0] == 'time0_blk0_size' and run[0][1] < 63:
+                continue
 
             # Drop run if not at least one block per thread
             if not configuration['develop-mode'] and nblocks_per_thread.subs(at_args) < 1:
