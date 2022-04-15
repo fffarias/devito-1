@@ -978,7 +978,7 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
             x, y = field.grid.dimensions
 
             eq0 = Eq(sp_in.symbolic_max, nnz[x] - 1,
-                     implicit_dims=(field.grid.time_dim, x))
+                     implicit_dims=(time, x))
 
             eq1 = Eq(in_i, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
 
@@ -994,7 +994,7 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
             x, y, z = field.grid.dimensions
 
             eq0 = Eq(sp_in.symbolic_max, nnz[x, y] - 1,
-                     implicit_dims=(field.grid.time_dim, x, y))
+                     implicit_dims=(time, x, y))
 
             eq1 = Eq(in_i, sp_source_mask[x, y, sp_in],
                      implicit_dims=(time, x, y, sp_in))

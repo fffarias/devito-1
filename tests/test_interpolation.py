@@ -610,7 +610,7 @@ def test_decompose_2d():
 
     sparse_eqs = src.preinject(field=u, save_src=save_src, sid=sid, mask=mask)
 
-    op = Operator(sparse_eqs)
+    op = Operator(sparse_eqs, opt=('advanced', {'blockrelax': True}))
     op.apply(time_M=nt-1)
     norm1 = np.linalg.norm(u.data)
 
@@ -641,7 +641,7 @@ def test_decompose_3d():
 
     sparse_eqs = src.preinject(field=u, save_src=save_src, sid=sid, mask=mask)
 
-    op = Operator(sparse_eqs)
+    op = Operator(sparse_eqs, opt=('advanced', {'blockrelax': True}))
     op.apply(time_M=nt-1)
     norm1 = np.linalg.norm(u.data)
 
