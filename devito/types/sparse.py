@@ -5,6 +5,7 @@ import sympy
 import numpy as np
 from cached_property import cached_property
 
+from devito.operator import Operator
 from devito.finite_differences import generate_fd_shortcuts
 from devito.mpi import MPI, SparseDistributor
 from devito.operations import LinearInterpolator, PrecomputedInterpolator
@@ -12,10 +13,10 @@ from devito.symbolics import (INT, FLOOR, cast_mapper, indexify,
                               retrieve_function_carriers)
 from devito.tools import (ReducerMap, as_tuple, flatten, prod, filter_ordered,
                           memoized_meth, is_integer)
-from devito.types.dense import DiscreteFunction, Function, SubFunction
+from devito.types.dense import DiscreteFunction, Function, SubFunction, TimeFunction
 from devito.types.dimension import (Dimension, ConditionalDimension, DefaultDimension,
                                     DynamicDimension)
-from devito.types.basic import Symbol
+from devito.types.basic import Symbol, Scalar
 from devito.types.equation import Eq, Inc
 from devito.types.utils import IgnoreDimSort
 
@@ -572,12 +573,22 @@ class SparseFunction(AbstractSparseFunction):
             np.floor(self.coordinates.data._local - self.grid.origin) / self.grid.spacing
         ).astype(int)
 
+    @property
+    def gridpoints_all(self):
+        if self.coordinates._data is None:
+            raise ValueError("No coordinates attached to this SparseFunction")
+
+        p = np.moveaxis(self._support, -1, 0)
+        p = p.reshape(np.prod(p.shape[:-1]), p.shape[-1])
+        p = np.unique(p, axis=0)
+        return p
+
     def guard(self, expr=None, offset=0):
         """
-        Generate guarded expressions, that is expressions that are evaluated
-        by an Operator only if certain conditions are met.  The introduced
-        condition, here, is that all grid points in the support of a sparse
-        value must fall within the grid domain (i.e., *not* on the halo).
+        Generate guarded expressions that are evaluated by an Operator only if certain
+        conditions are met. Here, the introduced condition is that all grid points in
+        support of a sparse value must fall within the grid domain (i.e.,
+        *not* on the halo).
 
         Parameters
         ----------
@@ -872,6 +883,128 @@ class SparseTimeFunction(AbstractSparseTimeFunction, SparseFunction):
             expr = expr.subs({self.time_dim: p_t})
 
         return super(SparseTimeFunction, self).inject(field, expr, offset=offset)
+
+    def decompose(self, field, expr):
+        """
+        Generate equations preinjecting an arbitrary sparse expression into a field.
+        Parameters
+        ----------
+        field : Function
+            Input field into which the injection is performed.
+        expr : expr-like
+            Injected expression.
+        offset : int, optional
+            Additional offset from the boundary.
+        """
+        # Derivatives must be evaluated before the introduction of indirect accesses
+        try:
+            _expr = expr.evaluate
+        except AttributeError:
+            # E.g., a generic SymPy expression or a number
+            _expr = expr
+
+        # needs work here to get precomputation equations
+        gpoints = self.gridpoints_all
+        nzinds = tuple(gpoints[:, i] for i in range(gpoints.shape[-1]))
+
+        # Source ID function to hold unique id for each point affected
+        s_id = Function(name='s_id', shape=field.grid.shape,
+                        dimensions=field.grid.dimensions,
+                        space_order=0, dtype=np.int32)
+        s_m = Function(name='s_m', shape=field.grid.shape,
+                       dimensions=field.grid.dimensions,
+                       space_order=0, dtype=np.int32)
+
+        s_id.data[nzinds] = tuple(np.arange(len(nzinds[0])))
+        s_m.data[nzinds] = 1
+
+        # Helper dimension to schedule loops of different sizes together
+        time = field.grid.time_dim
+        id_dim = Dimension(name='id_dim')
+        save_src = TimeFunction(name='save_src', shape=(self.shape[0], gpoints.shape[0]),
+                                dimensions=(time, id_dim))
+
+        save_src_term = self.inject(field=save_src[time, s_id], expr=_expr)
+        op1 = Operator(save_src_term)
+        op1.apply()
+        assert (save_src.shape[0] == self.shape[0])
+        return save_src, s_id, s_m
+
+    def preinject(self, field, save_src, sid, mask):
+        """
+        Generate equations preinjecting an arbitrary sparse expression into a field.
+        Parameters
+        ----------
+        field : Function
+            Input field into which the injection is performed.
+        expr : expr-like
+            Injected expression.
+        offset : int, optional
+            Additional offset from the boundary.
+        """
+        nnz_shape = (field.grid.shape[0:-1])  # Change only 3rd dim
+        nnz = Function(name='nnz', shape=nnz_shape,
+                       dimensions=field.grid.dimensions[0:-1],
+                       space_order=0, dtype=np.int32)
+        nnz.data[:] = mask.data[:].sum(-1)
+
+        # needs work here to get precomputation equations
+        gpoints = self.gridpoints_all
+        inds = tuple(gpoints[:, i] for i in range(gpoints.shape[-1]))
+
+        print("Grid - source positions:", inds)
+        max_in = len(np.unique(inds[-1]))
+        # Change only inner dim
+        sp_in = Dimension(name='sp_in')
+
+        sparse_shape = tuple(flatten((field.grid.shape[0:-1], max_in)))
+        sparse_dims = tuple(flatten((field.grid.dimensions[0:-1], sp_in)))
+
+        sp_source_mask = Function(name='sp_source_mask', shape=sparse_shape,
+                                  dimensions=sparse_dims, space_order=0, dtype=np.int32)
+        sp_source_mask.data[inds[0], :] = tuple(inds[-1][:len(np.unique(inds[-1]))])
+
+        # Temporary ints
+        in_i = Scalar(name='in_i', dtype=np.int32)
+        in_ii = Scalar(name='in_ii', dtype=np.int32)
+
+        # Time and stepping dimension
+        t = field.grid.stepping_dim
+        time = field.grid.time_dim
+
+        if len(field.grid.dimensions) == 2:  # 2D case
+            x, y = field.grid.dimensions
+
+            eq0 = Eq(sp_in.symbolic_max, nnz[x] - 1,
+                     implicit_dims=(field.grid.time_dim, x))
+
+            eq1 = Eq(in_i, sp_source_mask[x, sp_in], implicit_dims=(time, x, sp_in))
+
+            eq2 = Eq(in_ii, sid[x, in_i], implicit_dims=(time, x, sp_in))
+
+            inj_expr = save_src[time, in_ii]
+
+            eq3 = Inc(field[t, x, in_ii], inj_expr, implicit_dims=(time, x, sp_in))
+
+            return (eq0, eq1, eq2, eq3)
+
+        elif len(field.grid.dimensions) == 3:  # 3D case
+            x, y, z = field.grid.dimensions
+
+            eq0 = Eq(sp_in.symbolic_max, nnz[x, y] - 1,
+                     implicit_dims=(field.grid.time_dim, x, y))
+
+            eq1 = Eq(in_i, sp_source_mask[x, y, sp_in],
+                     implicit_dims=(time, x, y, sp_in))
+
+            eq2 = Eq(in_ii, sid[x, y, in_i], implicit_dims=(time, x, y, sp_in))
+
+            inj_expr = save_src[time, in_ii]
+
+            eq3 = Inc(field[t, x, y, in_ii], inj_expr,
+                      implicit_dims=(time, x, y, sp_in))
+
+        return (eq0, eq1, eq2, eq3)
 
     # Pickling support
     _pickle_kwargs = AbstractSparseTimeFunction._pickle_kwargs +\

@@ -160,7 +160,7 @@ class AnalyzeHeuristicBlocking(AnayzeBlockingBase):
         for c in clusters:
             # PARALLEL* and AFFINE are necessary conditions
             if AFFINE not in c.properties[d] or \
-               not ({PARALLEL, PARALLEL_IF_PVT} & c.properties[d]):
+                not ({PARALLEL, PARALLEL_IF_PVT} & c.properties[d]):
                 return clusters
 
             # Heuristic: innermost Dimensions may be ruled out a-priori
@@ -631,11 +631,9 @@ class RelaxSkewed(Queue):
             # lvalues = as_list(mapper.values())
 
             # Update `relations` with the newly created `Dimension`s
-            # import pdb;pdb.set_trace()
             relations = []
             for r in c.ispace.relations:
                 if any(f in r for f in family_dims) and mapper:
-                    # import pdb;pdb.set_trace()
                     rl = as_list(r)
                     newr = [j.xreplace(mapper) for j in rl]
                     relations.append(as_tuple(newr))

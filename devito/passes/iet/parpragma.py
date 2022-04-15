@@ -53,9 +53,9 @@ class PragmaSimdTransformer(PragmaTransformer):
                 continue
             candidate = candidates[-1]
 
-            # Only fully-parallel Iterations will be SIMD-ized (ParallelRelaxed
-            # might not be enough then)
-            if not candidate.is_Parallel:
+            # Only fully-parallel Iterations or Parallel Atomic will be SIMD-ized
+            # (ParallelRelaxed might not be enough then) 
+            if not (candidate.is_Parallel or candidate.is_ParallelAtomic):
                 continue
 
             # This check catches cases where an iteration appears as the vectorizable
