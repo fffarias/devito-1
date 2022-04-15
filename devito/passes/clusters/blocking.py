@@ -47,7 +47,7 @@ def blocking(clusters, sregistry, options):
     In case of skewing, if 'blockinner' is enabled, the innermost loop is also skewed.
     """
     if options['blockrelax']:
-        analyzer = AnalyzeBlocking()
+        analyzer = AnalyzeBlocking(options)
     else:
         analyzer = AnalyzeHeuristicBlocking(options)
     clusters = analyzer.process(clusters)
@@ -72,7 +72,7 @@ def skewing(clusters, sregistry, options):
            innermost loop.
     """
     if options['blockrelax']:
-        analyzer = AnalyzeBlocking()
+        analyzer = AnalyzeBlocking(options)
     else:
         analyzer = AnalyzeHeuristicBlocking(options)
     clusters = analyzer.process(clusters)
@@ -111,6 +111,11 @@ class AnayzeBlockingBase(Queue):
 
 class AnalyzeBlocking(AnayzeBlockingBase):
 
+    def __init__(self, options):
+        super().__init__()
+
+        self.inner = options['blockinner']
+
     def callback(self, clusters, prefix):
         if not prefix:
             return clusters
@@ -122,6 +127,12 @@ class AnalyzeBlocking(AnayzeBlockingBase):
                     PARALLEL_IF_ATOMIC,
                     PARALLEL_IF_PVT}.intersection(c.properties[d]):
                 return clusters
+
+            # Heuristic: innermost Dimensions may be ruled out a-priori
+            if not self.inner:
+                is_inner = d is c.itintervals[-1].dim
+                if is_inner:
+                    return clusters
 
         # All good, `d` is actually TILABLE
         processed = attach_property(clusters, d, TILABLE)
@@ -160,7 +171,7 @@ class AnalyzeHeuristicBlocking(AnayzeBlockingBase):
         for c in clusters:
             # PARALLEL* and AFFINE are necessary conditions
             if AFFINE not in c.properties[d] or \
-                not ({PARALLEL, PARALLEL_IF_PVT} & c.properties[d]):
+               not ({PARALLEL, PARALLEL_IF_PVT} & c.properties[d]):
                 return clusters
 
             # Heuristic: innermost Dimensions may be ruled out a-priori
@@ -330,8 +341,10 @@ class SynthesizeTBlocking(Queue):
         base = self.sregistry.make_name(prefix=d.name)
         name = self.sregistry.make_name(prefix="%s_blk" % base)
 
+        factors = [get_skewing_factor(c) for c in clusters]
+        sf = max(factors)
+
         for c in clusters:
-            sf = get_skewing_factor(c)
             if d.is_Time:
                 block_dims = create_block_dims(name, d, step, sf=sf)
 
@@ -497,7 +510,6 @@ class SynthesizeSkewing(Queue):
 
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
-
             skewlevel = 1
             intervals = []
             for i in c.ispace:
@@ -593,7 +605,9 @@ class RelaxSkewed(Queue):
                 processed.append(c)
                 continue
 
-            sf = get_skewing_factor(c)
+            factors = [get_skewing_factor(c) for c in clusters]
+            sf = max(factors)
+
             skew_dim = skew_dims[-1]
             intervals = []
             mapper = {}

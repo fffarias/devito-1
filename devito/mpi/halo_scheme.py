@@ -115,8 +115,10 @@ class HaloScheme(object):
 
                 # The `loc_indices` must match
                 if hse.loc_indices != v.loc_indices:
-                    raise ValueError("Cannot compute the union of one or more HaloScheme "
-                                     "when the `loc_indices` differ")
+                    import pdb;pdb.set_trace()
+                    pass
+                    # raise ValueError("Cannot compute the union of one or more HaloScheme "
+                    #                 "when the `loc_indices` differ")
 
                 # Potentially more halo exchanges required
                 halos = hse.halos | v.halos
