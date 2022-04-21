@@ -136,6 +136,10 @@ class AccBB(PragmaLangBB):
         return cls.mapper['map-present'](f.name, sections)
 
     @classmethod
+    def _map_wait(cls, queueid=None):
+        return cls.mapper['map-wait'](queueid)
+
+    @classmethod
     def _map_delete(cls, f, imask=None, devicerm=None):
         sections = cls._make_sections_from_imask(f, imask)
         if devicerm is not None:
