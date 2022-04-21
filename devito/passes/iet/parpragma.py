@@ -550,13 +550,8 @@ class PragmaLangBB(LangBB):
     def _map_present(cls, f, imask=None):
         return
 
-    @classmethod
-    def _map_wait(cls, queueid=None):
-        try:
-            return cls.mapper['map-wait'](queueid)
-        except KeyError:
-            # Not all languages may provide an explicit wait construct
-            return None
+    # Not all languages may provide an explicit wait construct
+    _map_wait = None
 
     @classmethod
     def _map_update(cls, f, imask=None):

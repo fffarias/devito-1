@@ -61,8 +61,8 @@ class Orchestrator(object):
             update = PragmaTransfer(self.lang._map_update_host_async, s.target,
                                     imask=imask, queueid=SharedData._field_id)
             preactions.append(update)
-        wait = self.lang._map_wait(SharedData._field_id)
-        if wait is not None:
+        if self.lang._map_wait is not None:
+            wait = self.lang._map_wait(SharedData._field_id)
             preactions.append(Pragma(wait))
         preactions.extend([DummyExpr(s.handle, 1) for s in sync_ops])
         preactions.append(BlankLine)
@@ -134,8 +134,8 @@ class Orchestrator(object):
                      for d in s.dimensions]
             postactions.append(PragmaTransfer(self.lang._map_update_device_async,
                                               s.target, imask=imask, queueid=fid))
-        wait = self.lang._map_wait(fid)
-        if wait is not None:
+        if self.lang._map_wait is not None:
+            wait = self.lang._map_wait(fid)
             postactions.append(Pragma(wait))
 
         # Turn prefetch IET into a ThreadFunction
