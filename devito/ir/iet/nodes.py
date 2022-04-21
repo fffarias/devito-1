@@ -1069,37 +1069,31 @@ class Prodder(Call):
 class Pragma(Node):
 
     """
-    One or more pragmas floating in the IET.
+    One or more pragmas floating in the IET constructed through a callback.
     """
 
-    def __init__(self, pragmas):
+    def __init__(self, callback, *a, **kwargs):
         super().__init__()
-        self.pragmas = as_tuple(pragmas)
+
+        self.callback = callback
+        self.a = a
+        self.kwargs = kwargs
+
+        self.pragmas = as_tuple(callback(*a, **kwargs))
 
     def __repr__(self):
         return '<Pragmas>'
 
 
-class Transfer(object):
-
-    """
-    A mixin for nodes representing data transfers.
-    """
-
-    pass
-
-
-class PragmaTransfer(Pragma, Transfer):
+class PragmaTransfer(Pragma):
 
     """
     A data transfer between host and device expressed by means of one or more pragmas.
     """
 
     def __init__(self, callback, function, **kwargs):
-        super().__init__(callback(function, **kwargs))
-        self.callback = callback
+        super().__init__(callback, function, **kwargs)
         self.function = function
-        self.kwargs = kwargs
 
     @property
     def functions(self):
