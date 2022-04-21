@@ -245,10 +245,7 @@ def linearize_transfers(iet, sregistry):
         if n.function not in candidates:
             continue
 
-        try:
-            imask0 = n.kwargs['imask']
-        except KeyError:
-            imask0 = []
+        imask0 = n.imask
 
         try:
             index = imask0.index(FULL)

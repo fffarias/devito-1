@@ -1091,9 +1091,10 @@ class PragmaTransfer(Pragma):
     A data transfer between host and device expressed by means of one or more pragmas.
     """
 
-    def __init__(self, callback, function, **kwargs):
-        super().__init__(callback, function, **kwargs)
+    def __init__(self, callback, function, imask=None, **kwargs):
+        super().__init__(callback, function, imask=imask, **kwargs)
         self.function = function
+        self.imask = imask or []
 
     @property
     def functions(self):
