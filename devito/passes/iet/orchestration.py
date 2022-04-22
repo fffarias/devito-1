@@ -5,10 +5,11 @@ from sympy import Or
 
 from devito.data import FULL
 from devito.ir.iet import (Call, Callable, Conditional, List, SyncSpot, FindNodes,
-                           Transformer, BlankLine, BusyWait, Pragma, PragmaTransfer,
-                           DummyExpr, derive_parameters, make_thread_ctx)
+                           Transformer, BlankLine, BusyWait, Pragma, DummyExpr,
+                           derive_parameters, make_thread_ctx)
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import LangBB
+from devito.passes.iet.parpragma import PragmaTransfer  #TODO: THIS SHUOLD NOT BEHERE
 from devito.symbolics import CondEq, CondNe, FieldFromComposite
 from devito.tools import as_mapper, filter_ordered, filter_sorted, flatten, is_integer
 from devito.types import (WaitLock, WithLock, FetchUpdate, FetchPrefetch,
@@ -44,6 +45,8 @@ class Orchestrator(object):
         return iet
 
     def _make_withlock(self, iet, sync_ops, pieces, root):
+        fid = SharedData._field_id
+
         # Sorting for deterministic code gen
         locks = sorted({s.lock for s in sync_ops}, key=lambda i: i.name)
 
@@ -58,9 +61,9 @@ class Orchestrator(object):
         for s in sync_ops:
             imask = [s.handle.indices[d] if d.root in s.lock.locked_dimensions else FULL
                      for d in s.target.dimensions]
-            update = PragmaTransfer(self.lang._map_update_host_async, s.target,
-                                    imask=imask, queueid=SharedData._field_id)
-            preactions.append(update)
+            preactions.append(
+                self.lang._map_update_host_async(s.target, imask, fid)
+            )
         if self.lang._map_wait is not None:
             preactions.append(Pragma(self.lang._map_wait, queueid=SharedData._field_id))
         preactions.extend([DummyExpr(s.handle, 1) for s in sync_ops])
@@ -100,9 +103,7 @@ class Orchestrator(object):
 
             imask = [(s.tstore, s.size) if d.root is s.dim.root else FULL
                      for d in s.dimensions]
-            postactions.append(
-                PragmaTransfer(self.lang._map_update_device, s.target, imask=imask)
-            )
+            postactions.append(self.lang._map_update_device(s.target, imask))
 
         # Turn init IET into a Callable
         functions = filter_ordered(flatten([(s.target, s.function) for s in sync_ops]))
@@ -131,8 +132,9 @@ class Orchestrator(object):
 
             imask = [(s.tstore, s.size) if d.root is s.dim.root else FULL
                      for d in s.dimensions]
-            postactions.append(PragmaTransfer(self.lang._map_update_device_async,
-                                              s.target, imask=imask, queueid=fid))
+            postactions.append(
+                self.lang._map_update_device_async(s.target, imask, fid)
+            )
         if self.lang._map_wait is not None:
             postactions.append(Pragma(self.lang._map_wait, queueid=fid))
 
@@ -189,7 +191,7 @@ class Orchestrator(object):
 
             # Construct init IET
             imask = [(ifc, s.size) if d.root is s.dim.root else FULL for d in dimensions]
-            fetch = PragmaTransfer(self.lang._map_to, f, imask=imask)
+            fetch = self.lang._map_to(f, imask=imask)
             fetches.append(Conditional(fcond, fetch))
 
             # Construct present clauses

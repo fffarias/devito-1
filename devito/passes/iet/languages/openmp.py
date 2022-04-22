@@ -10,7 +10,8 @@ from devito.ir import (Call, Conditional, List, Prodder, ParallelIteration,
 from devito.passes.iet.definitions import DataManager, DeviceAwareDataManager
 from devito.passes.iet.orchestration import Orchestrator
 from devito.passes.iet.parpragma import (PragmaSimdTransformer, PragmaShmTransformer,
-                                         PragmaDeviceAwareTransformer, PragmaLangBB)
+                                         PragmaDeviceAwareTransformer, PragmaLangBB,
+                                         PragmaTransfer)
 from devito.passes.iet.languages.C import CBB
 from devito.passes.iet.languages.utils import make_clause_reduction
 from devito.symbolics import CondEq, DefFunction

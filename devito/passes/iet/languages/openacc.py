@@ -4,7 +4,8 @@ from devito.arch import AMDGPUX, NVIDIAX
 from devito.ir import Call, List, ParallelIteration, ParallelTree, FindSymbols
 from devito.passes.iet.definitions import DeviceAwareDataManager
 from devito.passes.iet.orchestration import Orchestrator
-from devito.passes.iet.parpragma import PragmaDeviceAwareTransformer, PragmaLangBB
+from devito.passes.iet.parpragma import (PragmaDeviceAwareTransformer, PragmaLangBB,
+                                         PragmaTransfer)
 from devito.passes.iet.languages.C import CBB
 from devito.passes.iet.languages.openmp import OmpRegion, OmpIteration
 from devito.passes.iet.languages.utils import make_clause_reduction
@@ -150,13 +151,15 @@ class AccBB(PragmaLangBB):
 
     @classmethod
     def _map_update_host_async(cls, f, imask=None, queueid=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-update-host-async'](f.name, sections, queueid)
+        return PragmaTransfer(
+            cls.mapper['map-update-host-async'](f, imask, queueid=queueid)
+        )
 
     @classmethod
     def _map_update_device_async(cls, f, imask=None, queueid=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-update-device-async'](f.name, sections, queueid)
+        return PragmaTransfer(
+            cls.mapper['map-update-device-async'](f, imask, queueid=queueid)
+        )
 
 
 class DeviceAccizer(PragmaDeviceAwareTransformer):

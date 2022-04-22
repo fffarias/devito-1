@@ -16,16 +16,16 @@ from devito.ir.support import (SEQUENTIAL, PARALLEL, PARALLEL_IF_ATOMIC,
                                Property, Forward, detect_io)
 from devito.symbolics import ListInitializer, CallFromPointer, ccode
 from devito.tools import Signer, as_tuple, filter_ordered, filter_sorted, flatten
-from devito.types.basic import (AbstractFunction, AbstractSymbol, Indexed,
-                                LocalObject, Symbol)
+from devito.types.basic import AbstractFunction, AbstractSymbol
+from devito.types import Indexed, LocalObject, Symbol, Wildcard
 
 __all__ = ['Node', 'Block', 'Expression', 'Element', 'Callable', 'Call',
            'Conditional', 'Iteration', 'List', 'Section', 'TimedList', 'Prodder',
            'MetaCall', 'PointerCast', 'HaloSpot', 'IterationTree', 'Definition',
            'ExpressionBundle', 'AugmentedExpression', 'Increment', 'Return',
            'While', 'ParallelIteration', 'ParallelBlock', 'Dereference', 'Lambda',
-           'SyncSpot', 'Pragma', 'PragmaTransfer', 'DummyExpr', 'BlankLine',
-           'ParallelTree', 'BusyWait', 'CallableBody']
+           'SyncSpot', 'Pragma', 'DummyExpr', 'BlankLine', 'ParallelTree',
+           'BusyWait', 'CallableBody']
 
 # First-class IET nodes
 
@@ -1076,39 +1076,14 @@ class Pragma(Node):
         super().__init__()
 
         self.callback = callback
-        self.a = a
         self.kwargs = kwargs
-
-        self.pragmas = as_tuple(callback(*a, **kwargs))
 
     def __repr__(self):
         return '<Pragmas>'
 
-
-class PragmaTransfer(Pragma):
-
-    """
-    A data transfer between host and device expressed by means of one or more pragmas.
-    """
-
-    def __init__(self, callback, function, imask=None, **kwargs):
-        super().__init__(callback, function, imask=imask, **kwargs)
-        self.function = function
-        self.imask = imask or []
-
-    @property
-    def functions(self):
-        return (self.function,)
-
     @cached_property
-    def expr_symbols(self):
-        retval = [self.function.indexed]
-        for i in flatten(self.kwargs.items()):
-            try:
-                retval.extend(i.free_symbols)
-            except AttributeError:
-                pass
-        return tuple(retval)
+    def pragmas(self):
+        return as_tuple(self.callback(**self.kwargs))
 
 
 class ParallelIteration(Iteration):

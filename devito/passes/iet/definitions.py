@@ -8,9 +8,10 @@ from functools import singledispatch
 from operator import itemgetter
 
 from devito.ir import (Block, Definition, DeviceFunction, EntryFunction,
-                       PragmaTransfer, FindSymbols, MapExprStmts, Transformer)
+                       FindSymbols, MapExprStmts, Transformer)
 from devito.passes.iet.engine import iet_pass, iet_visit
 from devito.passes.iet.langbase import LangBB
+from devito.passes.iet.parpragma import PragmaTransfer  #TODO: THIS SHOULD NOT BEHERE
 from devito.passes.iet.misc import is_on_device
 from devito.symbolics import (Byref, DefFunction, IndexedPointer, ListInitializer,
                               SizeOf, VOID, Keyword, ccode)
@@ -359,10 +360,11 @@ class DeviceAwareDataManager(DataManager):
         `_map_array_on_high_bw_mem` is that the former triggers a data transfer to
         synchronize the host and device copies, while the latter does not.
         """
-        mmap = PragmaTransfer(self.lang._map_to, obj)
+        mmap = self.lang._map_to(obj)
 
+        #TODO!!! WE RESTART HERE...
         if read_only is False:
-            unmap = [PragmaTransfer(self.lang._map_update, obj),
+            unmap = [self.lang._map_update(obj),
                      PragmaTransfer(self.lang._map_release, obj, devicerm=devicerm)]
         else:
             unmap = PragmaTransfer(self.lang._map_delete, obj, devicerm=devicerm)

@@ -5,9 +5,9 @@ import numpy as np
 
 from devito.data import FULL
 from devito.ir import (BlankLine, Call, DummyExpr, Dereference, List, PointerCast,
-                       PragmaTransfer, FindNodes, FindSymbols, Transformer, Uxreplace)
+                       FindNodes, FindSymbols, Transformer, Uxreplace)
 from devito.passes.iet.engine import iet_pass
-from devito.passes.iet.parpragma import PragmaLangBB
+from devito.passes.iet.parpragma import PragmaLangBB, PragmaTransfer
 from devito.symbolics import DefFunction, MacroArgument, ccode
 from devito.tools import Bunch, DefaultOrderedDict, filter_ordered, flatten, prod
 from devito.types import Array, Symbol, FIndexed, Indexed, Wildcard
