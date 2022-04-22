@@ -1,7 +1,7 @@
 import cgen as c
 
 from devito.arch import AMDGPUX, NVIDIAX
-from devito.ir import Call, List, ParallelIteration, ParallelTree, FindSymbols
+from devito.ir import Call, List, ParallelIteration, ParallelTree, Pragma, FindSymbols
 from devito.passes.iet.definitions import DeviceAwareDataManager
 from devito.passes.iet.orchestration import Orchestrator
 from devito.passes.iet.parpragma import (PragmaDeviceAwareTransformer, PragmaLangBB,
@@ -104,10 +104,14 @@ class AccBB(PragmaLangBB):
             c.Pragma('acc update device(%s%s)' % (i, j)),
         'map-update-device-async': lambda i, j, k:
             c.Pragma('acc update device(%s%s) async(%s)' % (i, j, k)),
-        'map-release': lambda i, j, k:
-            c.Pragma('acc exit data delete(%s%s)%s' % (i, j, k)),
-        'map-exit-delete': lambda i, j, k:
-            c.Pragma('acc exit data delete(%s%s)%s' % (i, j, k)),
+        'map-release': lambda i, j:
+            c.Pragma('acc exit data delete(%s%s)' % (i, j)),
+        'map-release-if': lambda i, j, k:
+            c.Pragma('acc exit data delete(%s%s) if(%s)' % (i, j, k)),
+        'map-exit-delete': lambda i, j:
+            c.Pragma('acc exit data delete(%s%s)' % (i, j)),
+        'map-exit-delete-if': lambda i, j, k:
+            c.Pragma('acc exit data delete(%s%s) if(%s)' % (i, j, k)),
         'memcpy-to-device': lambda i, j, k:
             Call('acc_memcpy_to_device', [i, j, k]),
         'memcpy-to-device-wait': lambda i, j, k, l:
@@ -128,38 +132,32 @@ class AccBB(PragmaLangBB):
 
     @classmethod
     def _map_to_wait(cls, f, imask=None, queueid=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-enter-to-wait'](f.name, sections, queueid)
+        return PragmaTransfer(cls.mapper['map-enter-to-wait'], f, imask, queueid)
 
     @classmethod
     def _map_present(cls, f, imask=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-present'](f.name, sections)
+        return PragmaTransfer(cls.mapper['map-present'], f, imask)
 
     @classmethod
     def _map_wait(cls, queueid=None):
-        return cls.mapper['map-wait'](queueid)
+        return Pragma(cls.mapper['map-wait'], queueid)
 
     @classmethod
     def _map_delete(cls, f, imask=None, devicerm=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        if devicerm is not None:
-            cond = ' if(%s)' % devicerm.name
+        #TODO: _map_delete = super._map_release ?
+        if devicerm:
+            return PragmaTransfer(cls.mapper['map-exit-delete-if'], f, imask,
+                                  devicerm.name)
         else:
-            cond = ''
-        return cls.mapper['map-exit-delete'](f.name, sections, cond)
+            return PragmaTransfer(cls.mapper['map-exit-delete'], f, imask)
 
     @classmethod
     def _map_update_host_async(cls, f, imask=None, queueid=None):
-        return PragmaTransfer(
-            cls.mapper['map-update-host-async'](f, imask, queueid=queueid)
-        )
+        return PragmaTransfer(cls.mapper['map-update-host-async'], f, imask, queueid)
 
     @classmethod
     def _map_update_device_async(cls, f, imask=None, queueid=None):
-        return PragmaTransfer(
-            cls.mapper['map-update-device-async'](f, imask, queueid=queueid)
-        )
+        return PragmaTransfer(cls.mapper['map-update-device-async'], f, imask, queueid)
 
 
 class DeviceAccizer(PragmaDeviceAwareTransformer):

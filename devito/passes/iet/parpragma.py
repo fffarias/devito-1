@@ -5,8 +5,8 @@ from sympy import And, Max, true
 
 from devito.data import FULL
 from devito.ir import (Conditional, DummyEq, Dereference, Expression, ExpressionBundle,
-                       FindSymbols, FindNodes, ParallelTree, Pragma, Prodder, List,
-                       Transformer, IsPerfectIteration, filter_iterations,
+                       FindSymbols, FindNodes, ParallelTree, Pragma, Prodder, Transfer,
+                       List, Transformer, IsPerfectIteration, filter_iterations,
                        retrieve_iteration_tree, VECTORIZED)
 from devito.passes.iet.engine import iet_pass
 from devito.passes.iet.langbase import (LangBB, LangTransformer, DeviceAwareMixin,
@@ -428,17 +428,25 @@ class PragmaShmTransformer(PragmaSimdTransformer):
         return self._make_parallel(iet)
 
 
-class PragmaTransfer(Pragma):
+class PragmaTransfer(Pragma, Transfer):
 
     """
     A data transfer between host and device expressed by means of one or more pragmas.
     """
 
-    def __init__(self, callback, function, imask=None, **kwargs):
-        super().__init__(callback, **kwargs)
+    def __init__(self, callback, function, imask=None, arguments=None):
+        super().__init__(callback, arguments)
 
-        self.function = function
-        self.imask = imask or []
+        self._function = function
+        self._imask = imask or []
+
+    @property
+    def function(self):
+        return self._function
+
+    @property
+    def imask(self):
+        return self._imask
 
     @cached_property
     def sections(self):
@@ -480,7 +488,7 @@ class PragmaTransfer(Pragma):
     def pragmas(self):
         # Stringify sections
         sections = ''.join(['[%s:%s]' % (ccode(i), ccode(j)) for i, j in self.sections])
-        return as_tuple(self.callback(self.function.name, sections, **self.kwargs))
+        return as_tuple(self.callback(self.function.name, sections, *self.arguments))
 
     @property
     def functions(self):
@@ -489,7 +497,7 @@ class PragmaTransfer(Pragma):
     @cached_property
     def expr_symbols(self):
         retval = [self.function.indexed]
-        for i in flatten(self.kwargs.items()) + flatten(self.sections):
+        for i in self.arguments + tuple(flatten(self.sections)):
             try:
                 retval.extend(i.free_symbols)
             except AttributeError:
@@ -604,8 +612,7 @@ class PragmaLangBB(LangBB):
 
     @classmethod
     def _map_alloc(cls, f, imask=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-enter-alloc'](f.name, sections)
+        return PragmaTransfer(cls.mapper['map-enter-alloc'], f, imask)
 
     @classmethod
     def _map_present(cls, f, imask=None):
@@ -620,24 +627,27 @@ class PragmaLangBB(LangBB):
 
     @classmethod
     def _map_update_host(cls, f, imask=None, queueid=None):
-        return PragmaTransfer(cls.mapper['map-update-host'](f, imask))
+        return PragmaTransfer(cls.mapper['map-update-host'], f, imask)
 
     _map_update_host_async = _map_update_host
 
     @classmethod
     def _map_update_device(cls, f, imask=None, queueid=None):
-        return PragmaTransfer(cls.mapper['map-update-device'](f, imask))
+        return PragmaTransfer(cls.mapper['map-update-device'], f, imask)
 
     _map_update_device_async = _map_update_device
 
     @classmethod
     def _map_release(cls, f, imask=None, devicerm=None):
-        sections = cls._make_sections_from_imask(f, imask)
-        return cls.mapper['map-release'](f.name, sections,
-                                         (' if(%s)' % devicerm.name) if devicerm else '')
+        if devicerm:
+            return PragmaTransfer(cls.mapper['map-release-if'], f, imask,
+                                  devicerm.name)
+        else:
+            return PragmaTransfer(cls.mapper['map-release'], f, imask)
 
     @classmethod
     def _map_delete(cls, f, imask=None, devicerm=None):
+        from IPython import embed; embed()
         sections = cls._make_sections_from_imask(f, imask)
         # This ugly condition is to avoid a copy-back when, due to
         # domain decomposition, the local size of a Function is 0, which

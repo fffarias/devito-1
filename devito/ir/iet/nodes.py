@@ -25,7 +25,7 @@ __all__ = ['Node', 'Block', 'Expression', 'Element', 'Callable', 'Call',
            'ExpressionBundle', 'AugmentedExpression', 'Increment', 'Return',
            'While', 'ParallelIteration', 'ParallelBlock', 'Dereference', 'Lambda',
            'SyncSpot', 'Pragma', 'DummyExpr', 'BlankLine', 'ParallelTree',
-           'BusyWait', 'CallableBody']
+           'BusyWait', 'CallableBody', 'Transfer']
 
 # First-class IET nodes
 
@@ -1072,18 +1072,33 @@ class Pragma(Node):
     One or more pragmas floating in the IET constructed through a callback.
     """
 
-    def __init__(self, callback, *a, **kwargs):
+    def __init__(self, callback, arguments=None):
         super().__init__()
 
         self.callback = callback
-        self.kwargs = kwargs
+        self.arguments = as_tuple(arguments)
 
     def __repr__(self):
         return '<Pragmas>'
 
     @cached_property
     def pragmas(self):
-        return as_tuple(self.callback(**self.kwargs))
+        return as_tuple(self.callback(*self.arguments))
+
+
+class Transfer(object):
+
+    """
+    An interface for Nodes that represent host-device data transfers.
+    """
+
+    @property
+    def function(self):
+        raise NotImplementedError
+
+    @property
+    def imask(self):
+        raise NotImplementedError
 
 
 class ParallelIteration(Iteration):
